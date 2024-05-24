@@ -1279,12 +1279,22 @@ plot_residus_density <- function(abundance, fitted_abundance, file_path, verbose
     dir.create(file_path, recursive = TRUE)
   }
   
+  # Initialiser la matrice des résidus
+  residus <- matrix(NA, nrow = nrow(abundance), ncol = ncol(abundance))
+  
   for (j in 1:ncol(abundance)) {
     # Calcul des résidus
-    residus <- abundance[, j] - fitted_abundance[, j]
+    residus[, j] <- abundance[, j] - fitted_abundance[, j]
+    
+    # Déterminer la largeur de bande
+    if (bw.nrd0(residus[, j]) < 0.3) {
+      mon_bw <- 0.3
+    } else {
+      mon_bw <- bw.nrd0(residus[, j])
+    }
     
     # Graphique de densité des résidus
-    dens <- density(residus)
+    dens <- density(residus[, j], bw = mon_bw)
     file_name <- file.path(file_path, paste("residus_density_species_", j, ".png", sep = ""))
     png(file_name, width = 800, height = 600)
     plot(dens, main = paste("Espèce", j), xlab = "Résidus", ylab = "Densité", col = "blue")
