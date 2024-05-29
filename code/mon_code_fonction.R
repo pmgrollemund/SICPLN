@@ -310,6 +310,14 @@ compute_r_squared <- function(observed_values, predicted_values) {
   return(r_squared)
 }
 
+
+# Fonction pour calculer le log-vraisemblance
+calculate_log_likelihood <- function(Abundance, Covariate, B, Sigma, M, S) {
+  Z <- as.matrix(Covariate %*% B)
+  loglik <- sum(dpois(Abundance, exp(Z + M + S^2 / 2), log = TRUE))
+  return(loglik)
+}
+
 ### Fonction compute_fisher_opt_pln : ----
 ## Description : ----
    # Introduit le calcul sur la selection de variables avec SIC
@@ -319,7 +327,7 @@ compute_r_squared <- function(observed_values, predicted_values) {
 
 ## Fonction compute_fisher_opt_pln : ----
   # Introduit le calcul sur la selection de variables avec SIC dans le modèle PLN
-compute_fisher_opt_pln <- function(Covariate, Abundance, O, numb_eps, maxIter, plngendata) {
+compute_fisher_opt_pln <- function(Covariate, Abundance, O, numb_eps , maxIter, plngendata) {
   
   # Covariate = Covariate; Abundance = Abundance;
   # O = offsett; numb_eps = numb_eps; maxIter = maxIter; plngendata = plngendata
@@ -474,18 +482,20 @@ compute_fisher_opt_pln <- function(Covariate, Abundance, O, numb_eps, maxIter, p
       S <- varpar$S
       B <- B
       Sigma <- plngendata$model_par$Sigma
-      Omega <- plngendata$model_par$Omega
-      
+      loglik <- calculate_log_likelihood(Abundance, Covariate, B, Sigma, M, S)
     }
+    
     model_par <- list(B = B, Sigma = Sigma,Omega = Omega)
-    var_par <- list(M = M, S = plngendata$var_par$S, S2 = plngendata$var_par$S2^2)
-    res1 <- list(model_par = model_par, var_par = var_par,vcov_model = plngendata$vcov_model, Offset = O, Covariate = Covariate, dd = dd)
+    var_par <- list(M= M, S = plngendata$var_par$S, S2 = plngendata$var_par$S2^2)
+    
+    res1 <- list(model_par = model_par, var_par = var_par,vcov_model = plngendata$vcov_model, Offset = O, Covariate = Covariate, dd = dd, loglik = loglik)
     return(res1)
     
   } , error = function(e){ return(res1) }) #Spécification de la classe d'erreur et gestion de l'erreur
-  cat("\t\n Execution of SICPLN is DONE! \n")
+  cat("\n\t Execution of SICPLN is DONE! \n\t")
   return(soltest) 
 }
+
 # -----
 
 
@@ -502,7 +512,7 @@ compute_fisher_opt_pln <- function(Covariate, Abundance, O, numb_eps, maxIter, p
     #cfr en bas
 ###  Fonction SICPLN : -----
 #interactive=TRUE,covariance_structure="full"
-SICPLN <- function(formule, offset_column_name , data , numb_eps, maxIter, control = control) {
+SICPLN <- function(formule, offset_column_name = NULL , data , numb_eps = 100, maxIter = 300, control = control) {
   if (!is.null(offset_column_name)) {
     offsett <- calcul_Offset(data, column_name = offset_column_name)
     offset_values <- data[[offset_column_name]]
@@ -512,50 +522,56 @@ SICPLN <- function(formule, offset_column_name , data , numb_eps, maxIter, contr
     Covariate <- model.matrix(formule, data)
     Abundance <- model.response(model.frame(formule, data))
     
-    # Création du modèle PLN avec les spécifications fournies
     capture.output({plngendata <- PLN(Abundance ~ . + offset(offset_values), data = data, control = control)}, file = NULL)
     colnames(offsett) <- colnames(plngendata$model_par$B)
     
-    res_fs <- compute_fisher_opt_pln(Covariate = Covariate, Abundance = Abundance,
-                                     O = offsett, numb_eps = numb_eps, maxIter = maxIter, plngendata = plngendata)
+    res_fs <- compute_fisher_opt_pln(Covariate = Covariate, Abundance = Abundance, O = offsett, numb_eps = numb_eps, maxIter = maxIter, plngendata = plngendata)
     
     colnames(res_fs$model_par$B) <- colnames(plngendata$model_par$B)
     rownames(res_fs$model_par$B) <- rownames(plngendata$model_par$B)
     
-    predictions <- predict_sicpln(Covariate = Covariate , Offset = offsett ,params = list(B = res_fs$model_par$B,S = res_fs$var_par$S , M = res_fs$var_par$M))
-    predict_pln <- predict_sicpln(Covariate = Covariate , Offset = offsett ,params = list(B = plngendata$model_par$B,S = plngendata$var_par$S , M = plngendata$var_par$M))
-    residuals <- sum(abs(data$Abundance - predictions))
-    residuals_pln <- sum(abs(data$Abundance - predict_pln))
-    Rsquared <- compute_r_squared(Abundance , predictions)
-    # Résultats du modèle
-    resf <- list(res_pln = plngendata, res_fisher = res_fs, fitted = predictions , residuals = residuals , residuals_pln = residuals_pln, R_sqared = Rsquared)
+    predictions <- predict_sicpln(Covariate = Covariate, Offset = offsett, params = list(B = res_fs$model_par$B, S = res_fs$var_par$S, M = res_fs$var_par$M))
+    predict_pln <- predict_sicpln(Covariate = Covariate, Offset = offsett, params = list(B = plngendata$model_par$B, S = plngendata$var_par$S, M = plngendata$var_par$M))
+    residuals <- sum(abs(Abundance - predictions))
+    residuals_pln <- sum(abs(Abundance - predict_pln))
+    Rsquared <- compute_r_squared(Abundance, predictions)
+    
+    loglik <- res_fs$loglik
+    nb_param <- length(res_fs$model_par$B)
+    BIC <- -2 * loglik + log(nrow(data)) * nb_param
+    
+    resf <- list(res_pln = plngendata, res_fisher = res_fs, fitted = predictions, residuals = residuals, residuals_pln = residuals_pln, R_sqared = Rsquared,
+                 loglik = loglik, BIC = BIC, nb_param = nb_param)
   } else {
     offsett <- calcul_Offset(data, column_name = offset_column_name)
     
     Covariate <- model.matrix(formule, data)
     Abundance <- model.response(model.frame(formule, data))
     
-    # Création du modèle PLN avec les spécifications fournies
-    
     capture.output({plngendata <- PLN(Abundance ~ ., data = data, control = control)}, file = NULL)
     colnames(offsett) <- colnames(plngendata$model_par$B)
     
-    res_fs <- compute_fisher_opt_pln(Covariate = Covariate, Abundance = Abundance,
-                                     O = offsett, numb_eps = numb_eps, maxIter = maxIter, plngendata = plngendata)
+    res_fs <- compute_fisher_opt_pln(Covariate = Covariate, Abundance = Abundance, O = offsett, numb_eps = numb_eps, maxIter = maxIter, plngendata = plngendata)
     
     colnames(res_fs$model_par$B) <- colnames(plngendata$model_par$B)
     rownames(res_fs$model_par$B) <- rownames(plngendata$model_par$B)
     
-    predictions <- predict_sicpln(Covariate = Covariate , Offset = offsett ,params = list(B = res_fs$model_par$B,S = res_fs$var_par$S , M = res_fs$var_par$M))
-    predict_pln <- predict_sicpln(Covariate = Covariate , Offset = offsett ,params = list(B = plngendata$model_par$B,S = plngendata$var_par$S , M = plngendata$var_par$M))
-    residuals <- sum(abs(data$Abundance - predictions))
-    residuals_pln <- sum(abs(data$Abundance - predict_pln))
-    Rsquared <- compute_r_squared(Abundance , predictions)
-    # Résultats du modèle
-    resf <- list(res_pln = plngendata, res_fisher = res_fs, fitted = predictions , residuals = residuals , residuals_pln = residuals_pln, R_sqared = Rsquared)
+    predictions <- predict_sicpln(Covariate = Covariate, Offset = offsett, params = list(B = res_fs$model_par$B,S = res_fs$var_par$S , M = res_fs$var_par$M))
+    predict_pln <- predict_sicpln(Covariate = Covariate, Offset = offsett, params = list(B = plngendata$model_par$B, S = plngendata$var_par$S, M = plngendata$var_par$M))
+    residuals <- sum(abs(Abundance - predictions))
+    residuals_pln <- sum(abs(Abundance - predict_pln))
+    Rsquared <- compute_r_squared(Abundance, predictions)
+    
+    loglik <- res_fs$loglik
+    nb_param <- length(res_fs$model_par$B)
+    BIC <- -2 * loglik + log(nrow(data)) * nb_param
+    
+    resf <- list(res_pln = plngendata, res_fisher = res_fs, fitted = predictions, residuals = residuals, residuals_pln = residuals_pln, R_sqared = Rsquared,
+                 loglik = loglik, BIC = BIC, nb_param = nb_param)
   }
-  cat("\n\t")
-  return(resf)  # Retourne les résultats
+  
+  class(resf) <- "SICPLN"
+  return(resf)
 }
   
   # ----
@@ -582,6 +598,41 @@ SICPLN <- function(formule, offset_column_name , data , numb_eps, maxIter, contr
    
    
 # ----
+# Fonction d'impression pour le modèle SICPLN
+print.SICPLN <- function(x, ...) {
+  cat("A multivariate Poisson Lognormal fit with full covariance model.\n")
+  cat("==================================================================\n")
+  cat(sprintf("  nb_param   loglik      BIC\n"))
+  cat(sprintf("%-10d %-10.3f %-10.3f\n", x$nb_param, x$loglik, x$BIC))
+  cat("==================================================================\n")
+  cat("  * Useful fields\n")
+  cat("  $model_par,  $var_par, res_pln, res_fisher\n")
+  cat("  $loglik, $BIC, $nb_param, $criteria\n")
+  cat("* Useful S3 methods\n")
+  cat("  print(), coef(), sigma(), vcov(), fitted()\n")
+  cat("  predict_sicpln() \n")
+}
+
+# Méthode coef pour la classe SICPLN
+coef.SICPLN <- function(object, ...) {
+  return(object$res_fisher$model_par$B)
+}
+
+# Méthode sigma pour la classe SICPLN
+sigma.SICPLN <- function(object, ...){
+  return(object$res_fisher$var_par$S)
+}
+
+# Méthode vcov pour la classe SICPLN
+vcov.SICPLN <- function(object, ...){
+  return(object$res_fisher$vcov_model)
+}
+
+# Méthode fitted pour la classe SICPLN
+fitted.SICPLN <- function(object, ...){
+  return(object$fitted)
+}
+
 # Fonction MSE (Mean Squared Error) ----
 ## Description : ----
    # Fonction qui calcule la moyenne des erreurs au carré entre les vraies valeurs et les valeurs prédites.
@@ -671,7 +722,7 @@ Error_var<-function(data, params){       #GDR : 27-3-2024 : j'ai remplace le nom
    # print(paste("Taux de certitude pour les Beta - TPR:", taux_certitude$TPR))
    
 ## fonction sparsity_recognition : ----
-sparsity_recognition=function(vrai_beta, beta_estime){
+sparsity_recognition <- function(vrai_beta, beta_estime){
      TN <- 0            # Effectifs des vraies zeros
      TP <- 0            # Effectifs des elements non-zeros
      for(i in 1:nrow(vrai_beta))
@@ -1116,8 +1167,33 @@ plot_coefficient <- function(coef_matrix, axis_names = c("Genus", "Variables", "
 #----
 
 
+# Détecter les lignes de séparation pour les variables catégorielles
+factor_lines <- function(data, coef_matrix) {
+  # Initialiser le vecteur index
+  index <- vector()
+  
+  # Obtenir les noms des lignes de la matrice de coefficients, en excluant la première ligne
+  coef_rownames <- rownames(coef_matrix)  #[-1]
+  
+  # Obtenir les noms des colonnes du data frame, en excluant la première colonne
+  data_colnames <- colnames(data)  #[-1]
+  
+  # Parcourir les noms des lignes de la matrice de coefficients
+  for (i in seq_along(coef_rownames)) {
+    # Si le nom de la ligne n'apparaît pas dans les noms de colonnes des données
+    if (!(coef_rownames[i] %in% data_colnames)) {
+      # Ajouter l'index à la liste
+      index <- c(index, i)
+    }
+  }
+  
+  # Retourner le vecteur d'index
+  return(index)
+}
+
+
 # Définition de la fonction pour tracer les coefficients :----
-coef_genus_barre <- function(coef_matrix, axis_names = c("Genus", "Variables", "Coefficient Value", "Title"), grad_min, grad_max) {
+coef_genus_barre <- function(coef_matrix, axis_names = c("Genus", "Variables", "Coefficient Value", "Title"), grad_min, grad_max, data) {
   # Renommer les axes et le gradient de couleur à partir des paramètres d'entrée
   y_axis_name <- axis_names[2]
   x_axis_name <- axis_names[1]
@@ -1126,22 +1202,37 @@ coef_genus_barre <- function(coef_matrix, axis_names = c("Genus", "Variables", "
   
   # Convertir la matrice de coefficients en un format long pour ggplot
   melted_coef_matrix <- melt(coef_matrix)
-  melted_coef_matrix$sparsity <- (ifelse(melted_coef_matrix$value == 0, 'Zero', "Nonzero"))
+  melted_coef_matrix$sparsity <- ifelse(melted_coef_matrix$value == 0, 'Zero', 'Nonzero')
+  
+  index <- factor_lines(data, coef_matrix)
   
   # Création du graphique avec ggplot
-  plot <- ggplot(melted_coef_matrix, aes(x =as.factor(Var2), y = as.factor(Var1),pattern = sparsity, fill = value)) +
+  plot <- ggplot(melted_coef_matrix, aes(x = as.factor(Var2), y = as.factor(Var1), pattern = sparsity, fill = value)) +
     geom_tile(aes(fill = value), colour = "white") + 
     geom_tile_pattern(pattern_color = NA, pattern_fill = "black", pattern_angle = 45,
-                      pattern_density = 0.15, pattern_spacing = 0.065,pattern_key_scale_factor = 1) +
-    scale_pattern_manual(values = c(Zero = "circle", Nonzero = "none"),name="") +
-    scale_fill_gradient2( low = "darkred",high = "darkgreen",mid = "white", midpoint = 0, limit = c(grad_min, grad_max), name = color_gradient_name) +
-    coord_equal() + labs(x = x_axis_name, y = y_axis_name, title = title, color = "black") +
-    guides(pattern = guide_legend(override.aes = list(fill = "white")))+
-    theme(legend.position = "right", plot.title = element_text(size = 10, hjust = 0.5), axis.title = element_text(size = 10), legend.text = element_text(size = 10), strip.text.x = element_text(size = 10, colour = "black"), axis.text.y = element_text(size = 10, colour = "black"), axis.text.x = element_text(size = 10, colour = "black"))
+                      pattern_density = 0.15, pattern_spacing = 0.065, pattern_key_scale_factor = 1) +
+    scale_pattern_manual(values = c(Zero = "circle", Nonzero = "none"), name = "") +
+    scale_fill_gradient2(low = "darkred", high = "darkgreen", mid = "white", midpoint = 0, limit = c(grad_min, grad_max), name = color_gradient_name) +
+    coord_equal() + 
+    labs(x = x_axis_name, y = y_axis_name, title = title, color = "black") +
+    guides(pattern = guide_legend(override.aes = list(fill = "white"))) +
+    theme(legend.position = "right", plot.title = element_text(size = 10, hjust = 0.5), 
+          axis.title = element_text(size = 10), legend.text = element_text(size = 10), 
+          strip.text.x = element_text(size = 10, colour = "black"), axis.text.y = element_text(size = 10, colour = "black"), 
+          axis.text.x = element_text(size = 10, colour = "black"))
+  # Ajouter des lignes horizontales pour séparer les variables
+  if (length(index) > 0) {
+    plot <- plot + 
+      geom_hline(yintercept = min(index) - 0.5, color = "black") +
+      geom_hline(yintercept = max(index) + 0.5, color = "black") +
+      annotate("text", x = (min(index) + max(index)) / 2, y = (min(index) - 0.5) / 2, label = "Variables quantitatives", color = "black", size = 5, hjust = 0) +
+      annotate("text", x = (min(index) + max(index)) / 2, y = (min(index) + max(index)) / 2, label = "Variables catégorielles", color = "black", size = 5, hjust = 0)
+  }
   
   # Retourner le graphique
   return(plot)
 }
+
 #----
 # MAtrice de precision
 plot_precision_matrix <- function(coef_matrix, 
@@ -1224,7 +1315,7 @@ datat_coef_path <- function(stockage_coef, numero_espece, nombre_variable, matri
 boxplot_graph <- function(data_df, x, y, title){
   plt <- suppressMessages(
     ggplot(data_df, aes(x = !!rlang::sym(x), y = !!rlang::sym(y), fill = !!rlang::sym(x))) +
-      geom_boxplot() +
+      geom_violin() +
       labs(x = x, y = y, title = title) +
       scale_fill_discrete(name = x)
   )
@@ -1320,34 +1411,38 @@ plot_residus_density <- function(abundance, fitted_abundance, file_path, verbose
 plot_abundance_vs_environment <- function(B_hat, data , output_dir) {
   selected_vars <- colnames(B_hat[-1,])[apply(B_hat[-1,], 2,
                                               function(x) any(x != 0 & x < max(B_hat[-1,])))]
-  selected_vars_and_coeffs <- as.matrix(B_hat[-1, selected_vars])
-  colnames(selected_vars_and_coeffs) <- selected_vars
-
-  # Boucle pour parcourir chaque élément de la matrice selected_vars_and_coeffs
-  for (i in 1:nrow(selected_vars_and_coeffs)) {
-    for (j in 1:ncol(selected_vars_and_coeffs)) {
-      row_name <- rownames(selected_vars_and_coeffs)[i]
-      col_name <- colnames(selected_vars_and_coeffs)[j]
-
-      # Vérifier si le coefficient est différent de zéro
-      if (selected_vars_and_coeffs[i, j] != 0) {
-        # Récupérer les données de l'abondance et de l'environnement
-        environment <- data[[row_name]]
-        abundance <- data$Abundance[, which(colnames(data$Abundance) == col_name)]
-
-        # Créer un data.frame pour ggplot
-        plot_data <- data.frame(environment = environment, abundance = abundance)
-
-        # Créer le graphique
-        plotcovar_Abund <- ggplot(plot_data, aes(x = environment, y = abundance)) +
-          geom_point() +
-          labs(x = col_name, y = row_name) +
-          theme_minimal()
-
-        # Sauvegarder le graphique
-        ggsave(file.path(output_dir, paste("plotcovar_Abund_", row_name, "_", col_name, ".pdf", sep = "")), plotcovar_Abund, width = 10, height = 6, units = "in")      }
+  
+  if(length(selected_vars) > 0){
+    selected_vars_and_coeffs <- as.matrix(B_hat[-1, selected_vars])
+    colnames(selected_vars_and_coeffs) <- selected_vars
+    
+    # Boucle pour parcourir chaque élément de la matrice selected_vars_and_coeffs
+    for (i in 1:nrow(selected_vars_and_coeffs)) {
+      for (j in 1:ncol(selected_vars_and_coeffs)) {
+        row_name <- rownames(selected_vars_and_coeffs)[i]
+        col_name <- colnames(selected_vars_and_coeffs)[j]
+        
+        # Vérifier si le coefficient est différent de zéro
+        if (selected_vars_and_coeffs[i, j] != 0) {
+          # Récupérer les données de l'abondance et de l'environnement
+          environment <- data[[row_name]]
+          abundance <- data$Abundance[, which(colnames(data$Abundance) == col_name)]
+          
+          # Créer un data.frame pour ggplot
+          plot_data <- data.frame(environment = environment, abundance = abundance)
+          
+          # Créer le graphique
+          plotcovar_Abund <- ggplot(plot_data, aes(x = environment, y = abundance)) +
+            geom_point() +
+            labs(x = col_name, y = row_name) +
+            theme_minimal()
+          
+          # Sauvegarder le graphique
+          ggsave(file.path(output_dir, paste("plotcovar_Abund_", row_name, "_", col_name, ".pdf", sep = "")), plotcovar_Abund, width = 10, height = 6, units = "in")      }
+      }
     }
-  } 
+  }
 }
+
 
 
