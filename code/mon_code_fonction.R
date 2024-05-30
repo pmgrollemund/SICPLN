@@ -327,15 +327,17 @@ calculate_log_likelihood <- function(Abundance, Covariate, B, Sigma, M, S) {
 
 ## Fonction compute_fisher_opt_pln : ----
   # Introduit le calcul sur la selection de variables avec SIC dans le modèle PLN
-compute_fisher_opt_pln <- function(Covariate, Abundance, O, numb_eps , maxIter, plngendata) {
+compute_fisher_opt_pln <- function(Covariate, Abundance, O, numb_eps, maxIter, plngendata) {
   
   # Covariate = Covariate; Abundance = Abundance;
   # O = offsett; numb_eps = numb_eps; maxIter = maxIter; plngendata = plngendata
   
   p <- ncol(Abundance)                      # nombre d'especes
   n <- nrow(Covariate)                      # nombre d'observation
-
-  O <- O
+  #Covariate <- cbind(rep(1,n),Covariate)            # Ajout de l'intercept pour la matrices des covariables 
+  
+  O <- O #offset PMG
+  #dim(O)
   d <- ncol(Covariate) 
   w <- rep(1,n)                     # le poids de chaque observation
   B <- plngendata$model_par$B        # Le parametre  B generé par la fontion PLN          GDR 05-04-2024  : A revoir le commentaire
@@ -416,10 +418,9 @@ compute_fisher_opt_pln <- function(Covariate, Abundance, O, numb_eps , maxIter, 
         
         fish_Sigma <- fisher+Sigma_Bt
         score_v_bloc <- score-v_bloc
-        
+        # cat("**** QR decomposition***** \n ")
         # QR decomposition de pour calculer l'inverse de l'information de fisher
         qr_decomposition <- qr(fish_Sigma)
-        
         # Matrice Q
         Q <- qr.Q(qr_decomposition)
         
@@ -434,7 +435,7 @@ compute_fisher_opt_pln <- function(Covariate, Abundance, O, numb_eps , maxIter, 
         
         # Calcul de l'inverse de l'information de fisher
         inverse_fish_Sigma <-inverse_R %*% transpose_Q
-      
+        # cat("*************** ",sum(inverse_fish_Sigma), "\n")
         # mise à jour de B
         B_new <- as.matrix(B_bloc+inverse_fish_Sigma%*%(score_v_bloc))
         
@@ -451,9 +452,14 @@ compute_fisher_opt_pln <- function(Covariate, Abundance, O, numb_eps , maxIter, 
           
         }
         
+        #--------------------------------- 
+        
+        
+        
         diff_B <- sum(abs(B_newmat-B_oldf))
         if(diff_B <= B_tol)
         {
+          #cat("Convergence atteint avant max_iter","\n")
           for(bi in 2:nrow(B_newmat))
           {
             for(bj in 1:ncol(B_newmat))
@@ -467,6 +473,7 @@ compute_fisher_opt_pln <- function(Covariate, Abundance, O, numb_eps , maxIter, 
         }
         if(k==maxIter)
         {
+          #cat(" pas de Convergence","\n")
           B <- B_newmat
           B_oldf <- B
         }
@@ -482,20 +489,22 @@ compute_fisher_opt_pln <- function(Covariate, Abundance, O, numb_eps , maxIter, 
       S <- varpar$S
       B <- B
       Sigma <- plngendata$model_par$Sigma
+      Omega <- plngendata$model_par$Omega
       loglik <- calculate_log_likelihood(Abundance, Covariate, B, Sigma, M, S)
     }
     
     model_par <- list(B = B, Sigma = Sigma,Omega = Omega)
     var_par <- list(M= M, S = plngendata$var_par$S, S2 = plngendata$var_par$S2^2)
     
+    
     res1 <- list(model_par = model_par, var_par = var_par,vcov_model = plngendata$vcov_model, Offset = O, Covariate = Covariate, dd = dd, loglik = loglik)
     return(res1)
     
   } , error = function(e){ return(res1) }) #Spécification de la classe d'erreur et gestion de l'erreur
+  cat("\n\n\t Adjusting a SIC-PLN Model : \n")
   cat("\n\t Execution of SICPLN is DONE! \n\t")
   return(soltest) 
 }
-
 # -----
 
 
@@ -571,9 +580,10 @@ SICPLN <- function(formule, offset_column_name = NULL , data , numb_eps = 100, m
   }
   
   class(resf) <- "SICPLN"
+  cat("\n\n")
   return(resf)
 }
-  
+
   # ----
   
 # Exemple a faire pour la fonction SICPLN &  Compute-fisher : ----
@@ -1224,9 +1234,9 @@ coef_genus_barre <- function(coef_matrix, axis_names = c("Genus", "Variables", "
   if (length(index) > 0) {
     plot <- plot + 
       geom_hline(yintercept = min(index) - 0.5, color = "black") +
-      geom_hline(yintercept = max(index) + 0.5, color = "black") +
-      annotate("text", x = (min(index) + max(index)) / 2, y = (min(index) - 0.5) / 2, label = "Variables quantitatives", color = "black", size = 5, hjust = 0) +
-      annotate("text", x = (min(index) + max(index)) / 2, y = (min(index) + max(index)) / 2, label = "Variables catégorielles", color = "black", size = 5, hjust = 0)
+      geom_hline(yintercept = max(index) + 0.5, color = "black")
+      # annotate("text", x = (min(index) + max(index)) / 2, y = (min(index) - 0.5) / 2, label = "Variables quantitatives", color = "black", size = 5, hjust = 0) +
+      # annotate("text", x = (min(index) + max(index)) / 2, y = (min(index) + max(index)) / 2, label = "Variables catégorielles", color = "black", size = 5, hjust = 0)
   }
   
   # Retourner le graphique
@@ -1433,7 +1443,7 @@ plot_abundance_vs_environment <- function(B_hat, data , output_dir) {
           
           # Créer le graphique
           plotcovar_Abund <- ggplot(plot_data, aes(x = environment, y = abundance)) +
-            geom_point() +
+            geom_point() + geom_smooth(method = lm ,formula = y ~ x)
             labs(x = col_name, y = row_name) +
             theme_minimal()
           
