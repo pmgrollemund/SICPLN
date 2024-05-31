@@ -1441,7 +1441,7 @@ plot_abundance_vs_environment <- function(B_hat, data , output_dir) {
 }
 
 
-plot_combined_density <- function(data1, data2, data3, col1 = "red", col2 = "blue", col3 = "green", col4 = "purple", main = "Combined Density Plot", xlab) {
+plot_combined_density <- function(data1, data2, data3, col1 = "red", col2 = "blue", col3 = "green", main = "Combined Density Plot", xlab) {
   dx1 <- density(data1)
   dy1 <- density(data2)
   dy2 <- density(data3)
