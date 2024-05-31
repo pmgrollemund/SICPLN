@@ -1,0 +1,24 @@
+
+## README 
+1. Install the required R packages :
+You need to install all the necessary R packages mentioned in the script or used implicitly. You can do this by logging on to R and running :
+
+2. Preparing the script
+
+Save the script:
+Save your script to a file, e.g. run_analysis.R.
+
+Prepare custom functions:
+Ensure that the file containing the custom functions (my_function_code.R) is accessible and that the path is correctly specified in the script. Place this file in an appropriate directory and note its path.
+
+
+3. Preparing arguments
+Preparing the arguments :
+Your script requires three arguments: the path to the database (.RData file), the output directory and the custom functions file. Make sure these files and directories exist.
+
+4. Running the script
+
+Running the script :
+Open a terminal and navigate to the directory where your script is located. Execute the script, passing the necessary arguments.
+
+
