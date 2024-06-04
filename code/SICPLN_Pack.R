@@ -1,4 +1,4 @@
-d######### Guy Darcy Remeasha et Paul-Marie Grollemund
+######### Guy Darcy Remeasha et Paul-Marie Grollemund
 ######### 2024-03-25
 ################################################################################
 
@@ -691,6 +691,8 @@ Error_var<-function(data, params){       #GDR : 27-3-2024 : j'ai remplace le nom
   ## Conversion of data and parameters to torch tensors (pointers)
   data   <- lapply(data, torch_tensor)
   params <- lapply(params, torch_tensor, requires_grad = F)
+  
+  
   #Calcul des Coeffs pour les donnees ajustees
   S2 <- torch_square(params$S[index])
   Z <- data$O[index] + params$M[index] + torch_matmul(data$Covariate[index], params$B)
@@ -762,12 +764,42 @@ sparsity_recognition <- function(vrai_beta, beta_estime){
 error_cal <- function(nombre_espece , taille_echant, nbre_repetition) {
   
   # Initialisation des paramètres
-  nombre_espece <- p
-  taille_echant <- n
-  sp <- nombre_espece      # Nombre d'espèces
+  sp <- nombre_espece
   n <- taille_echant
   
   nb_times <- nbre_repetition       # Nombre de répétitions pour la simulation
+  
+  
+  n <- n  # Nombre d'observations
+  p <- p  # Nombre de covariables
+  d <- d # Nombre d'espèces
+  
+  # Définition des paramètres pour le calcul des erreurs 
+  beta <- matrix(1:(p*d),nrow = d,ncol = p)
+  Sigma <- diag(p)
+  
+  # Génération des covariables (matrice aléatoire)
+  Covariate <- matrix(runif(n * d), nrow = n, ncol = d)
+  
+  # Génération des données d'exemple
+  gen_data <- simul_Abundance(B = beta, Sigma, Covariate)
+  
+  #================================================================================
+  rownames(gen_data$Covariate) <- rownames(gen_data$Abundance)
+  
+  gen_data$Covariate <- cbind(gen_data$Covariate, o = gen_data$o)
+  
+  
+  data_tmp <- list(Abundance = gen_data$Abundance, Covariate = gen_data$Covariate)
+  data_to_PLN <- prepare_data(data_tmp$Abundance, data_tmp$Covariate)
+  data_to_PLN <- data_to_PLN[, -ncol(data_to_PLN)]
+  data_to_PLN <- data_to_PLN[, -ncol(data_to_PLN)]
+  
+  formule <- Abundance ~ .
+  data <- data_to_PLN
+  
+  # Spécifiez les paramètres de contrôle
+  control <- PLN_param(backend = "nlopt", covariance = "full")
   
   # Vecteurs pour stocker les erreurs pour chaque itération
   err_sic_sp <- numeric(nb_times)
@@ -788,38 +820,43 @@ error_cal <- function(nombre_espece , taille_echant, nbre_repetition) {
   TNR_GLMNET <- numeric(nb_times)
   
   # Initialisation des matrices pour stocker les coefficients estimés
-  list_mat_B_sp <- list(SICPLN = matrix(NA, 1, sp + 2),
+  # Initialisation des matrices pour stocker les coefficients estimés
+  list_mat_B_sp <- list(SIC_PLN = matrix(NA, 1, sp + 2),
                         PLN = matrix(NA, 1, sp + 2),
                         GLMNET = matrix(NA, 1, sp + 2))
+  
+  
+  
+  res_SICPLN <- SICPLN(formule ,offset_column_name = NULL, data = data_to_PLN, control = control)
+  
+  res_glmpois <- glmnet_lasso_poisson(data_tmp$Abundance,data_tmp$Covariate[, -ncol(data_tmp$Covariate)])
   
   # Boucle sur le nombre de répétitions
   for (t in 1:nb_times) {  
     # Code pour chaque répétition de simulation
-    gen_data <- simul_Abundance(B = beta, Sigma = Sigma, Covariate = Covariate)
-    Covariate <- gen_data$Covariate; Abundance <- gen_data$Abundance; p <- ncol(gen_data$Abundance); d <- ncol(gen_data$Covariate); n <- nrow(gen_data$Abundance)
-    res_SICPLN <- SICPLN(Covariate , Abundance , O = matrix(0,ncol = p,nrow = n), interactive = FALSE, covariance_structure = "full")
-    res_glmpois <- glmnet_lasso_poisson(Abundance, Covariate)
+    
+    cat("Preprocissing for time(s) :", t , "\n")
     
     # Calcul des erreurs pour chaque méthode
-    err_sic_sp[t] <- norm(((beta)-(res_SICPLN$res_fisher$B[-1,])),"F")/norm(beta,"F")
-    err_pln_sp[t] <- norm(((beta)-(res_SICPLN$res_pln$B[-1,])),"F")/norm(beta,"F")
+    err_sic_sp[t] <- norm(((beta)-(res_SICPLN$res_fisher$model_par$B[-1,])),"F")/norm(beta,"F")
+    err_pln_sp[t] <- norm(((beta)-(res_SICPLN$res_pln$model_par$B[-1,])),"F")/norm(beta,"F")
     err_glm_sp[t] <- norm(((beta)-(res_glmpois$hat_B[-1,])),"F")/norm(beta,"F")
     
     # Calcul des MSE
-    # Prediction SICPLN
+    # Prediction SIC_PLN
     # params <-params1
-    data_forma_pred <- list(Covariate=cbind(rep(1,n),Covariate),Abundance=Abundance
-                            ,O=res_SICPLN$res_fisher$O)
+    data_forma_pred <- list(Covariate=gen_data$Covariate,Abundance=gen_data$Abundance
+                            ,O=res_SICPLN$res_fisher$Offset)
     data <- data_forma_pred
-    params1 <- list(B=res_SICPLN$res_fisher$B,
-                    S=res_SICPLN$res_fisher$S, M=res_SICPLN$res_fisher$M)
-    n <- nrow(res_SICPLN$res_fisher$M)
+    params1 <- list(B=res_SICPLN$res_fisher$model_par$B,
+                    S=res_SICPLN$res_fisher$var_par$S, M=res_SICPLN$res_fisher$var_par$M)
+    n <- nrow(res_SICPLN$res_fisher$var_par$M)
     pred_sic <- Error_var(data=data_forma_pred, params=params1)  #Couche latente Z avec SIC
     
     # Prediction PLN
     # data_forma_pred$Y
-    params2 <- list(B=res_SICPLN$res_pln$B,S=res_SICPLN$res_pln$S
-                    ,M=res_SICPLN$res_pln$M)
+    params2 <- list(B=res_SICPLN$res_pln$model_par$B,S=res_SICPLN$res_pln$var_par$S
+                    ,M=res_SICPLN$res_pln$var_par$M)
     pred_pln <- Error_var(data=data_forma_pred, params=params2)  #couche latente Z avec PLNmodel 
     MSE_SIC[t] <- mse_predict(gen_data$Abundance,pred_sic)  #Erreur genere en utilisant SIC
     MSE_PLN[t] <- mse_predict(gen_data$Abundance,pred_pln)  #Erreur genere en utilisant PLNmodel
@@ -827,9 +864,9 @@ error_cal <- function(nombre_espece , taille_echant, nbre_repetition) {
     
     
     # Calcul des taux de faux positifs et faux négatifs
-    SIC_sparsity <- sparsity_recognition(beta,res_SICPLN$res_fisher$B[-1,])
+    SIC_sparsity <- sparsity_recognition(beta,res_SICPLN$res_fisher$model_par$B[-1,])
     GLMNET_sparsity <- sparsity_recognition(beta,res_glmpois$hat_B[-1,])
-    PLN_sparsity <- sparsity_recognition(beta,res_SICPLN$res_pln$B[-1,])
+    PLN_sparsity <- sparsity_recognition(beta,res_SICPLN$res_pln$model_par$B[-1,])
     TPR_SIC[t] <- SIC_sparsity$TPR
     TPR_PLN[t] <- PLN_sparsity$TPR
     TPR_GLMNET[t] <- GLMNET_sparsity$TPR
@@ -839,15 +876,15 @@ error_cal <- function(nombre_espece , taille_echant, nbre_repetition) {
     
     # Stockage des résultats dans les matrices
     
-    list_mat_B_sp[["SICPLN"]] <- rbind(list_mat_B_sp[[1]],cbind(abs(beta-res_SICPLN$res_fisher$B[-1,]),rep(n,d),rep(sp,d)))
-    list_mat_B_sp[["PLN"]] <- rbind(list_mat_B_sp[[2]],cbind(abs(beta-res_SICPLN$res_pln$B[-1,]),rep(n,d),rep(sp,d)))
-    list_mat_B_sp[["GLMNET"]] <- rbind(list_mat_B_sp[[3]],cbind(abs(beta-res_glmpois$hat_B[-1,]),rep(n,d),rep(sp,d)))
-    
+    # Stockage des résultats dans les matrices
+    list_mat_B_sp[["SIC_PLN"]] <- rbind(list_mat_B_sp[["SIC_PLN"]], cbind(abs(beta - res_SICPLN$res_fisher$model_par$B[-1,]), rep(n, d), rep(sp, d)))
+    list_mat_B_sp[["PLN"]] <- rbind(list_mat_B_sp[["PLN"]], cbind(abs(beta - res_SICPLN$res_pln$model_par$B[-1,]), rep(n, d), rep(sp, d)))
+    list_mat_B_sp[["GLMNET"]] <- rbind(list_mat_B_sp[["GLMNET"]], cbind(abs(beta - res_glmpois$hat_B[-1,]), rep(n, d), rep(sp, d)))
   }
   
   
   df_sp_size=data.frame(nom_fb=c(err_sic_sp,err_pln_sp, err_glm_sp),
-                        lab_methode = as.factor(rep(c("SICPLN","PLN","GLMNET"),each=length(err_sic_sp))),
+                        lab_methode = as.factor(rep(c("SIC_PLN","PLN","GLMNET"),each=length(err_sic_sp))),
                         ech_size=rep(c(n,n,n),each=length(err_sic_sp)),
                         sp_size=as.factor(rep(c(sp,sp,sp),each=length(err_sic_sp))))
   
@@ -872,14 +909,14 @@ error_cal <- function(nombre_espece , taille_echant, nbre_repetition) {
   MSE_GLMNET_mean <- mean(MSE_GLMNET)
   
   # Création des structures de données pour les résultats
-  SICPLN_matb <- as.matrix(list_mat_B_sp$SICPLN)
+  SICPLN_matb <- as.matrix(list_mat_B_sp$SIC_PLN)
   PLN_matb <- as.matrix(list_mat_B_sp$PLN)
   GLM_matb <- as.matrix(list_mat_B_sp$GLMNET)
-  head(list_mat_B_sp$SICPLN)
+  head(list_mat_B_sp$SIC_PLN)
   GLM_bpt <- as.numeric(GLM_matb[,1:sp])
   SIC_bpt <- as.numeric(SICPLN_matb[,1:sp])
   PLN_bpt <- as.numeric(PLN_matb[,1:sp])
-  lab_methode <- rep(c("GLMNET","SICPLN","PLN"),each=length(PLN_bpt))
+  lab_methode <- rep(c("GLMNET","SIC_PLN","PLN"),each=length(PLN_bpt))
   lab_ech_size <- rep(n,length(lab_methode))
   lab_sp_size <- rep(sp,length(lab_methode))
   df_bp <- data.frame(coef=c(GLM_bpt,SIC_bpt,PLN_bpt),lab_methode=lab_methode,ech_size=lab_ech_size,sp_size=lab_sp_size)
