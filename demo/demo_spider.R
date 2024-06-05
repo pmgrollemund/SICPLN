@@ -1,11 +1,3 @@
-################################################################################
-######### Application sur les données GENUS2
-#########    (données HSPIDER)
-######### Guy Darcy Remesha et Paul-Marie Grollemund
-######### 2024-04-09
-################################################################################
-
-# Nettoyage de l'environnement de travail
 rm(list = ls())
 
 # Récupération des arguments passés au script
@@ -30,6 +22,7 @@ if (!dir.exists(output_dir)) {
 
 # Importer les fonctions
 source(code_path)
+#source('/home/gdremesh/Bureau/new_code/demo_spider/SICPLN_Pack.R')
 
 #source("/home/gdremesh/Bureau/new_code/demo_spider/SICPLN_Pack.R")
 suppressPackageStartupMessages(library(VGAM))
@@ -139,7 +132,7 @@ ggsave(file.path(output_dir, "MSE_sicpln_graph.pdf"), MSE_sicpln_graph, width = 
 
 save.image(file.path(output, "Renv.RData"))
 
-e des VIF
+
 #retain_Covar <- Covariate[, Res_vif_A_Ref$selected_variables]
 retain_Covarr <- prep_spider[, Res_vif_A_Ref$selected_variables]
 
