@@ -1,3 +1,4 @@
+
 ######### Guy Darcy Remeasha et Paul-Marie Grollemund
 ######### 2024-03-25
 ################################################################################
@@ -110,45 +111,61 @@ simul_Abundance <-function(B,Sigma = diag(p),Covariate,o=rep(1,nrow(Covariate)))
 #print(resultats$coefficient)
 
 
+
+
+##### Fonction glmnet_lasso_poisson_withoffset : ----
 ##### Fonction glmnet_lasso_poisson : ----
-glmnet_lasso_poisson <- function(Abundance, Covariate,verbose=T){
-  #### Initialisation
-  #Nombre de colonnes dans la matrice Abundance, qui représente le nombre de variables à prédire
+glmnet_lasso_poisson <- function(Abundance, Covariate, offset_column_name = NULL, data, verbose = TRUE) {
+  
+  # Initialisations
   p <- ncol(Abundance)
-  
-  #Nombre de lignes dans la matrice Abundance, qui représente le nombre d'observations
   n <- nrow(Abundance)
+  d <- ncol(Covariate) + 1  # Nombre de covariables + intercept
   
-  # Nombre de colonnes dans la matrice Covariate, qui représente le nombre de Covariates plus un pour l'intercept
-  d <- ncol(Covariate)+1
+  hat_B <- matrix(NA, nrow = d, ncol = p)  # Matrice pour stocker les coefficients
+  colnames(hat_B) <- colnames(Abundance)
+  colnames <- c("(Intercept)", colnames(Covariate))
   
-  # Initialisation d'une matrice vide pour stocker les coefficients estimés pour chaque variable réponse
-  hat_B <- matrix(NA, ncol=p, nrow=d)
   
-  # Initialisation d'une matrice vide pour stocker les prédictions pour chaque variable réponse
   prediction <- matrix(NA, ncol = p, nrow = n)
+  colnames(prediction) <- colnames(Abundance)
   
-  #### Ajuste le modèle
-  # Boucle sur chaque variable réponse
+  # Gestion de l'offset
+  if (!is.null(offset_column_name)) {
+    offset_values <- data[[offset_column_name]]
+    data <- data[, !(names(data) %in% offset_column_name)]
+  }
+  
+  # Boucle de modélisation
   for (j in 1:p) {
+    if (is.null(offset_column_name)) {
+      res_glmnet <- glmnet(x = Covariate, y = Abundance[, j], family = "poisson")
+      if (verbose) {
+        cat("Coefficients pour la variable de réponse", j, ":\n")
+        print(coef(res_glmnet))
+      }
+      
+      hat_B[, j] <- as.vector(coef(res_glmnet, s = 1)) 
+      suppressWarnings(prediction[, j] <- predict(res_glmnet, newx = as.matrix(Covariate), s = 1, newoffset = ))
+      
+    } else {
+      res_glmnet <- glmnet(x = Covariate, y = Abundance[, j], offset = offset_values, family = "poisson")
+      if (verbose) {
+        cat("Coefficients pour la variable de réponse", j, ":\n")
+        print(coef(res_glmnet))
+      }
+      
+      hat_B[, j] <- as.vector(coef(res_glmnet, s = 1)) 
+      suppressWarnings(prediction[, j] <- predict(res_glmnet, newx = as.matrix(Covariate), s = 1, newoffset = offset_values))
+    }
     
-    # Estimation du modèle de régression LASSO avec glmnet pour la variable réponse j
-    res_glmnet <- glmnet(x = Covariate, y = Abundance[, j], family = "poisson")
-    if(verbose)
-      print(coef(res_glmnet))
-    
-    # Stockage des coefficients estimés pour la variable réponse j
-    hat_B[, j] <- as.matrix(coef(res_glmnet, s = 1))
-    
-    # Prédiction des valeurs pour la variable réponse j à partir du modèle ajusté
-    prediction[, j] <- predict(res_glmnet, newx = Covariate, s = 1)
     
   }
   
-  #### Résultat
-  # Retourne une liste contenant les coefficients estimés et les prédictions
-  return(list( hat_B = hat_B,prediction = prediction))
+  # Retourner une liste de hat_B et prediction
+  return(list(hat_B = hat_B, fitted = prediction))
 }
+
 # ----
 
 ## fonction  calcul des parametres : param_init ----
@@ -329,8 +346,10 @@ compute_log_likelihood <- function(Abundance, Covariate, B, Sigma, M, S) {
 # Introduit le calcul sur la selection de variables avec SIC dans le modèle PLN
 compute_fisher_opt_pln <- function(Covariate, Abundance, O, numb_eps, maxIter, plngendata) {
   
+  cat("\t\n Initialization... \n")
   p <- ncol(Abundance)                      # nombre d'especes
   n <- nrow(Covariate)                      # nombre d'observation
+  
   O <- O 
   d <- ncol(Covariate) 
   w <- rep(1,n)                     # le poids de chaque observation
@@ -347,6 +366,7 @@ compute_fisher_opt_pln <- function(Covariate, Abundance, O, numb_eps, maxIter, p
   E[1] <- e1                           #affectation du premier valeur au vecteur E
   
   for(t in 2:numb_eps){E[t] <- e1*(0.87)^(t-1)}
+  E
   #calcul des  100 autres elements du vecteur
   
   vecepsilon <- sort(E, decreasing = TRUE)
@@ -1115,7 +1135,7 @@ calculate_VIF <- function(Covariate, seuil, pval_threshold = 0.05) {
       for (j in 1:ncol(Covariate)) {
         if (j != i && (is.factor(Covariate[, j]) || is.character(Covariate[, j]))) {
           # Effectuer le test du chi-carré
-          chi2_test <- chisq.test(table(y, Covariate[, j]))
+          chi2_test <- suppressWarnings(chisq.test(table(y, Covariate[, j])))
           cat_pvals[i, j] <- chi2_test$p.value
         }
       }
@@ -1478,22 +1498,25 @@ plot_abundance_vs_environment <- function(B_hat, data , output_dir) {
 }
 
 
-plot_combined_density <- function(data1, data2, data3, col1 = "red", col2 = "blue", col3 = "green", main = "Combined Density Plot", xlab) {
+plot_combined_density <- function(data1, data2, data3, data4, col1 = "red", col2 = "blue", col3 = "green", col4 = "black" , main = "Combined Density Plot", xlab) {
   dx1 <- density(data1)
   dy1 <- density(data2)
   dy2 <- density(data3)
+  dy3 <- density(data4)
   
   
   df1 <- data.frame(x = dx1$x, y = dx1$y, group = "Density of Abundance (PLN)")
   df2 <- data.frame(x = dy1$x, y = dy1$y, group = "Density of Abundance_hat (PLN)")
   df3 <- data.frame(x = dy2$x, y = dy2$y, group = "Density of Abundance_hat (SICPLN)")
+  df4 <- data.frame(x = dy3$x, y = dy3$y, group = "Density of Abundance_hat (GLMNET)")
   
-  df <- rbind(df1, df2, df3)
+  
+  df <- rbind(df1, df2, df3, df4)
   
   plt <- ggplot(df, aes(x = x, y = y, color = group)) +
     geom_line(linewidth = 1, show.legend = TRUE) +
     labs(title = main, x = xlab, y = "Density") +
-    scale_color_manual(values = c(col1, col2, col3)) +
+    scale_color_manual(values = c(col1, col2, col3, col4)) +
     theme_minimal()
   
   return(plt)
