@@ -22,10 +22,9 @@ if (!dir.exists(output_dir)) {
 
 # Importer les fonctions
 source(code_path)
-#source('/home/gdremesh/Bureau/new_code/demo_spider/SICPLN_Pack.R')
 
-#source("/home/gdremesh/Bureau/new_code/demo_spider/SICPLN_Pack.R")
 suppressPackageStartupMessages(library(VGAM))
+
 spider <- hspider
 
 cat("\n\n\t Pretreament .... :\n")
