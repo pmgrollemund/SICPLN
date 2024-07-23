@@ -30,8 +30,7 @@ if (!dir.exists(output_dir)) {
 
 # Importer les fonctions
 source(code_path)
-#source("/home/gdremesh/Bureau/new_code/demo_genus/SICPLN_Pack.R")
-#load("/home/gdremesh/Bureau/new_code/demo_genus/genus2.RData")
+
 # Chargement de la base de données à partir du premier argument
 load(data_path)
 data <- genus2
