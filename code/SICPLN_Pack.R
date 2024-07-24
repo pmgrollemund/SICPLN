@@ -1559,13 +1559,19 @@ plot_abundance_regressions <- function(data, file_path) {
       filter(Species == species)
     
     # Créer un graphique de régression pour l'espèce actuelle
-    p <- suppressMessages(ggplot(species_data, aes(x = Value, y = Abundance)) +
-      geom_point() +
-      geom_smooth(method = "lm", se = FALSE, color = "blue") +
-      facet_wrap(~ Variable, scales = "free") +
-      labs(x = "Variables explicatives", y = "Abondance", 
-           title = paste("Régression pour", species)) +
-      theme_minimal())
+     p <- suppressMessages(ggplot(species_data, aes(x = Value, y = Abundance)) +
+                            geom_point() +
+                            geom_smooth(method = "lm", se = FALSE, color = "blue") +
+                            facet_wrap(~ Variable, scales = "free") +
+                            labs(x = "Variables explicatives", y = species, 
+                                 title = paste("Régression pour", species)) +
+                            theme_minimal() + theme(panel.background = element_rect(fill = "white", color = NA),
+                                                    plot.background = element_rect(fill = "white", color = NA),
+                                                    panel.grid.major = element_line(color = "grey80"),
+                                                    panel.grid.minor = element_line(color = "grey90"),
+                                                    text = element_text(size = 12, color = "black"),
+                                                    axis.text = element_text(color = "black"),
+                                                    plot.title = element_text(hjust = 0.5, face = "bold")))
     
     # Ajouter le graphique à la liste
     plots[[species]] <- p
