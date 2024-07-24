@@ -19,6 +19,9 @@ suppressPackageStartupMessages(library("reshape2"))
 suppressPackageStartupMessages(library("ggpattern"))
 suppressPackageStartupMessages(library("svMisc"))
 suppressPackageStartupMessages(library("rlang"))
+suppressPackageStartupMessages(library("tidyr"))
+suppressPackageStartupMessages(library("dplyr"))
+suppressPackageStartupMessages(library("RColorBrewer"))
 ################################################################################ ----
 #######
 # Required objects 
@@ -190,7 +193,8 @@ glmnet_lasso_poisson <- function(Abundance, Covariate, offset_column_name = NULL
 # print(params_init$B)
 # # Affichage des résidus
 # print("Résidus :")
-# print(params_init$M)
+# print(params_init$M)L'objectif de cette étude était de vérifier si les espèces d'araignées chasseuses se trouvaient toujours dans les mêmes endroits, en comparant avec des études précédentes. En outre, elle visait à décrire où chaque espèce d'araignée était la plus abondante et dans quelles conditions environnementales elle pouvait survivre.
+
 
 ### Fonction : ---- 
 param_init <- function(Covariate,Abundance,Offset = matrix(0, ncol = ncol(Abundance),
@@ -1461,7 +1465,7 @@ plot_residus_density <- function(abundance, fitted_abundance, file_path, verbose
   return(invisible(NULL))
 }
 
-plot_abundance_vs_environment <- function(B_hat, data , output_dir) {
+plot_abundance_vs_environment <- function(B_hat, data , file_path) {
   selected_vars <- colnames(B_hat[-1,])[apply(B_hat[-1,], 2,
                                               function(x) any(x != 0 & x < max(B_hat[-1,])))]
   
@@ -1520,5 +1524,57 @@ plot_combined_density <- function(data1, data2, data3, data4, col1 = "red", col2
     theme_minimal()
   
   return(plt)
+}
+
+
+# Fonction pour créer les graphiques de régression et les sauvegarder
+plot_abundance_regressions <- function(data, file_path) {
+  # Crée le répertoire s'il n'existe pas
+  if (!dir.exists(file_path)) {
+    dir.create(file_path, recursive = TRUE)
+  }
+  
+  # Convertir la matrice d'abondance en format long
+  abundance_long <- as.data.frame(as.table(as.matrix(data %>%
+                                                       select(starts_with("Abundance")))))
+  colnames(abundance_long) <- c("Observation", "Species", "Abundance")
+  
+  # Convertir les variables explicatives en format long
+  explanatory_long <- data %>%
+    select(-starts_with("Abundance")) %>%
+    mutate(Observation = as.character(row.names(data))) %>%
+    pivot_longer(cols = -Observation, names_to = "Variable", values_to = "Value")
+  
+  # Joindre les données d'abondance avec les variables explicatives
+  suppressWarnings(combined_data <- abundance_long %>%
+                     left_join(explanatory_long, by = "Observation"))
+  
+  # Créer une liste pour stocker les graphiques
+  plots <- list()
+  
+  # Itérer sur chaque variable d'abondance
+  for (species in unique(abundance_long$Species)) {
+    # Filtrer les données pour l'espèce actuelle
+    species_data <- combined_data %>%
+      filter(Species == species)
+    
+    # Créer un graphique de régression pour l'espèce actuelle
+    p <- suppressMessages(ggplot(species_data, aes(x = Value, y = Abundance)) +
+      geom_point() +
+      geom_smooth(method = "lm", se = FALSE, color = "blue") +
+      facet_wrap(~ Variable, scales = "free") +
+      labs(x = "Variables explicatives", y = "Abondance", 
+           title = paste("Régression pour", species)) +
+      theme_minimal())
+    
+    # Ajouter le graphique à la liste
+    plots[[species]] <- p
+    
+    # Sauvegarder le graphique
+    file_name <- file.path(file_path, paste("regression_plot_", species, ".png", sep = ""))
+    suppressMessages(ggsave(file_name, plot = p, width = 8, height = 6))
+  }
+  
+  return(plots)
 }
 
