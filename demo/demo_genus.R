@@ -82,7 +82,7 @@ data_reg <- data.frame(
   center_y = data_to_PLN$center_y,
   surface = data_to_PLN$surface
 )
-row.names(data_reg) <- as.character(1:990)
+row.names(data_reg) <- as.character(1:nrow(data_to_PLN))
 
 regression_species <- plot_abundance_regressions(data = data_reg, file_path = output_dir)
 
