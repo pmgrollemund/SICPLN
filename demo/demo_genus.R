@@ -70,6 +70,23 @@ data_tmp <- list(Abundance = data_to_PLN$Abundance, Covariate = retain_Covar)
 data_to_PLN <- prepare_data(data_tmp$Abundance, data_tmp$Covariate)
 data_to_PLN <- data_to_PLN[, -ncol(data_to_PLN)]
 
+
+
+# Appeler la fonction pour générer les graphiques
+data_reg <- data.frame(
+  Abundance = data_to_PLN$Abundance,
+  vegetation_index = data_to_PLN$vegetation_index,
+  rainfall = data_to_PLN$rainfall,
+  wetness = data_to_PLN$wetness,
+  center_x = data_to_PLN$center_x,
+  center_y = data_to_PLN$center_y,
+  surface = data_to_PLN$surface
+)
+row.names(data_reg) <- as.character(1:990)
+
+regression_species <- plot_abundance_regressions(data = data_reg, file_path = output_dir)
+
+
 # Spécifiez les paramètres de contrôle
 control <- PLN_param(backend = "nlopt", covariance = "full")
 
