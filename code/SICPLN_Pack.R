@@ -1250,6 +1250,10 @@ factor_lines <- function(data, coef_matrix) {
 
 
 # Définition de la fonction pour tracer les coefficients :----
+# Example
+# load("../results/pln_spider.RData")
+# plot_coef_pln <- coef_genus_barre(spider_pln$model_par$B[-1,], 
+#                                  axis_names = c("Spider", "Variables", "Coefficients value", "PLN"), data)
 coef_genus_barre <- function(coef_matrix, axis_names = c("Genus", "Variables", "Coefficient Value", "Title"), data) {
   # Renommer les axes et le gradient de couleur à partir des paramètres d'entrée
   y_axis_name <- axis_names[2]

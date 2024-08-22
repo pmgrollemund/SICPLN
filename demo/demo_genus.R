@@ -23,6 +23,9 @@ code_path <- args[3]
 
 # Créer le répertoire de sortie
 temps <- format(Sys.time(), "%Y-%m-%d_%H-%M-%S")
+if (!dir.exists(output)) {
+  dir.create(output)
+}
 output_dir <- file.path(output, paste("SICPLN_execution", temps, sep = "_"))
 if (!dir.exists(output_dir)) {
   dir.create(output_dir)

@@ -62,6 +62,12 @@ cat("\n\n\t launch of the PLN model .\n")
 cat("        ==========================\n")
 
 spider_pln <- PLNmodels::PLN(Abundance ~ . , control = control, data = data_to_PLN) 
+
+
+############### PMG 2024-08-22
+save(spider_pln,file="../results/pln_spider.RData")
+###############
+
 print(spider_pln$model_par$B)
 
 
