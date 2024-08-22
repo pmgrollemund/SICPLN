@@ -1,0 +1,176 @@
+---
+title: "titre"
+author: "Remesha"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: yes
+    number_sections: true
+vignette: >
+  %\VignetteIndexEntry{Introduction to SICPLN method}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+
+
+This vignette describes step by step how to use the SICPLN method. 
+Below, you can find the following implemented features:
+Explication rapide de la vignette
+
+# La méthode SICPLN
+
+rappeler à quoi sert le modele, sur quelles données...
+
+# cas d'étude spider
+
+## importation des données
+
+```{r ,eval=TRUE,include = TRUE}
+
+suppressPackageStartupMessages(library(VGAM))
+data("hspider")
+spider <- hspider
+
+```
+
+```{r ,echo=FALSE,eval=TRUE,include = TRUE}
+
+
+source("../code/SICPLN_Pack.R")
+```
+
+
+
+
+
+## Prétraitement 
+
+```{r ,eval=TRUE,include = TRUE}
+  set.seed(1)
+
+# Séparation des données d'abondance et des covariables
+Abundance <- spider[,-c(1:6)]
+Covariate <- spider[,c(1:6)]
+
+# enleve de ReflLux car fortement correllée
+prep_spider <-  PLNmodels::prepare_data(Abundance,Covariate)
+
+# calcul des VIF avec variable Reflux
+Res_vif_A_Ref <- calculate_VIF(Covariate[,-3], 5)
+cat("\n\n\t Variable selection using VIF :\n")
+print(Res_vif_A_Ref$selected_variables)
+
+# Variables retenues après étude des VIF
+#retain_Covar <- Covariate[, Res_vif_A_Ref$selected_variables]
+retain_Covarr <- prep_spider[, Res_vif_A_Ref$selected_variables]
+
+rownames(retain_Covarr) <- rownames(prep_spider$Abundance)
+
+
+data_tmp <- list(Abundance = prep_spider$Abundance, Covariate = retain_Covarr)
+data_to_PLN <- prepare_data(data_tmp$Abundance, data_tmp$Covariate)
+data_to_PLN <- data_to_PLN[, -ncol(data_to_PLN)]
+
+# Spécifiez les paramètres de contrôle
+control <- PLN_param(backend = "nlopt", covariance = "full")
+
+```
+
+
+
+## Application du modèle 
+
+```{r ,eval=TRUE,include = TRUE}
+# Ajustement du modèle PLN (Poisson-Lognormal) avec la surface en tant qu'offset
+cat("\n\n\t launch of the PLN model .\n")
+cat("        ==========================\n")
+
+spider_pln <- PLNmodels::PLN(Abundance ~ . , control = control, data = data_to_PLN) 
+```
+
+```{r ,eval=TRUE,include = TRUE}
+print(spider_pln$model_par$B)
+
+```
+
+```{r ,eval=TRUE,include = TRUE}
+# Ajustement pour la selection de variable
+cat("\n\n\t launch of the SIC-PLN Model. \n")
+cat("        ============================ \n")
+
+formule <- Abundance ~ .
+data <- data_to_PLN
+
+
+```
+
+# Results
+## matrice B 
+
+
+```{r ,eval=TRUE,include = TRUE}
+  set.seed(1)
+
+spider_sicpln <- SICPLN(formule , data = data_to_PLN, control = control)
+spider_sicpln$res_fisher$model_par$B
+```
+
+
+
+```{r ,eval=TRUE,include = TRUE}
+  set.seed(1)
+
+# Convertir la matrice en un format adapté à ggplot2
+data_df <- melt(data$Abundance)
+data_sic <- melt(spider_sicpln$fitted) 
+
+# Renommer les colonnes
+colnames(data_df) <- c("Site", "Species", "Comptage")
+colnames(data_sic) <- c("Site", "Species", "Comptage")
+
+# Graphiques
+plot_coef_pln <- coef_genus_barre(spider_pln$model_par$B[-1,], 
+                                  axis_names = c("Spider", "Variables", "Coefficients value", "PLN"), data)
+plot_coef_sicpln <- coef_genus_barre(spider_sicpln$res_fisher$model_par$B[-1,],
+                                     axis_names = c("Spider species", "Variables", "Coefficients value", "SICPLN"), data)
+plot_coef_sicpln
+```
+
+
+## matrice de precision
+```{r ,eval=TRUE,include = TRUE}
+
+```
+
+## Autour des données
+
+```{r ,eval=TRUE,include = TRUE}
+  set.seed(1)
+
+# Convertir la matrice en un format adapté à ggplot2
+data_df <- melt(data$Abundance)
+data_sic <- melt(spider_sicpln$fitted)
+```
+
+
+# cas d'étude genus
+
+
+
+
+# Session informations
+```{r session,echo=FALSE,message=FALSE, warning=FALSE}
+  sessionInfo()
+```
+
+
+
+
