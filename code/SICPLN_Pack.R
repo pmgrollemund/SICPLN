@@ -22,6 +22,10 @@ suppressPackageStartupMessages(library("rlang"))
 suppressPackageStartupMessages(library("tidyr"))
 suppressPackageStartupMessages(library("dplyr"))
 suppressPackageStartupMessages(library("RColorBrewer"))
+suppressPackageStartupMessages(library("gplots"))
+suppressPackageStartupMessages(library("viridis"))
+suppressPackageStartupMessages(library("factoextra"))
+suppressPackageStartupMessages(library(tidyverse))
 ################################################################################ ----
 #######
 # Required objects 
@@ -1250,10 +1254,6 @@ factor_lines <- function(data, coef_matrix) {
 
 
 # Définition de la fonction pour tracer les coefficients :----
-# Example
-# load("../results/pln_spider.RData")
-# plot_coef_pln <- coef_genus_barre(spider_pln$model_par$B[-1,], 
-#                                  axis_names = c("Spider", "Variables", "Coefficients value", "PLN"), data)
 coef_genus_barre <- function(coef_matrix, axis_names = c("Genus", "Variables", "Coefficient Value", "Title"), data) {
   # Renommer les axes et le gradient de couleur à partir des paramètres d'entrée
   y_axis_name <- axis_names[2]
@@ -1279,26 +1279,25 @@ coef_genus_barre <- function(coef_matrix, axis_names = c("Genus", "Variables", "
     guides(pattern = guide_legend(override.aes = list(fill = "white"))) +
     theme(legend.position = "right", plot.title = element_text(size = 10, hjust = 0.5), 
           axis.title = element_text(size = 10), legend.text = element_text(size = 10), 
-          strip.text.x = element_text(size = 10, colour = "black"), axis.text.y = element_text(size = 10, colour = "black"), 
-          axis.text.x = element_text(size = 10, colour = "black"))
+          strip.text.x = element_text(size = 10, colour = "black"), 
+          axis.text.y = element_text(size = 10, colour = "black"), 
+          axis.text.x = element_text(size = 8, angle = 90, hjust = 1, vjust = 0.5, colour = "black")) # Ajuster l'angle du texte sur l'axe x
+  
   # Ajouter des lignes horizontales pour séparer les variables
   if (length(index) > 0) {
     plot <- plot + 
       geom_hline(yintercept = min(index) - 0.5, color = "black") +
       geom_hline(yintercept = max(index) + 0.5, color = "black")
-    # annotate("text", x = (min(index) + max(index)) / 2, y = (min(index) - 0.5) / 2, label = "Variables quantitatives", color = "black", size = 5, hjust = 0) +
-    # annotate("text", x = (min(index) + max(index)) / 2, y = (min(index) + max(index)) / 2, label = "Variables catégorielles", color = "black", size = 5, hjust = 0)
   }
   
   # Retourner le graphique
   return(plot)
 }
-
 #----
 # MAtrice de precision
 plot_precision_matrix <- function(coef_matrix, 
                                   axis_names = c("Genus","Variables","Coefficients value","SICPLN"),
-                                  limit = c(-1,1)){
+                                  limit = c(-1,1)) {
   # Renommer les axes et le gradient de couleur à partir des paramètres d'entrée
   y_axis_name <- axis_names[2]
   x_axis_name <- axis_names[1]
@@ -1309,9 +1308,21 @@ plot_precision_matrix <- function(coef_matrix,
   melted_coef_matrix <- melt(coef_matrix)
   
   # Création du graphique avec ggplot
-  plot <- ggplot(melted_coef_matrix, aes(Var1, Var2,value)) +
+  plot <- ggplot(melted_coef_matrix, aes(Var1, Var2, value)) +
     geom_tile(aes(fill = value), colour = "white") +
-    scale_fill_gradient2(low = "darkred", high = "darkgreen",mid="white", midpoint = 0, limit = limit,name=color_gradient_name)+ labs(x = x_axis_name, y = y_axis_name, title = title,color = "black")+theme(legend.position = "right",plot.title = element_text(size = 20,hjust = 0.5),axis.title = element_text(size = 15),legend.text = element_text(size = 12),strip.text.x = element_text(size = 15, colour = "black"),axis.text.y = element_text(size = 15,colour = "black"),axis.text.x = element_text(size = 15,colour = "black"))
+    scale_fill_gradient2(low = "darkred", high = "darkgreen", mid = "white", midpoint = 0, 
+                         limit = limit, name = color_gradient_name) +
+    labs(x = x_axis_name, y = y_axis_name, title = title, color = "black") +
+    theme(
+      legend.position = "right",
+      plot.title = element_text(size = 20, hjust = 0.5),
+      axis.title = element_text(size = 15),
+      legend.text = element_text(size = 12),
+      strip.text.x = element_text(size = 15, colour = "black"),
+      axis.text.y = element_text(size = 10, colour = "black"),  # Taille réduite pour l'axe y
+      axis.text.x = element_text(size = 10, angle = 90, hjust = 1, vjust = 0.5, colour = "black")  # Texte incliné à 90°
+    )
+  
   return(plot)
 }
 #----
@@ -1376,7 +1387,7 @@ datat_coef_path <- function(stockage_coef, numero_espece, nombre_variable, matri
 boxplot_graph <- function(data_df, x, y, title){
   plt <- suppressMessages(
     ggplot(data_df, aes(x = !!rlang::sym(x), y = !!rlang::sym(y), fill = !!rlang::sym(x))) +
-      geom_violin() +
+      geom_boxplot() +
       labs(x = x, y = y, title = title) +
       scale_fill_discrete(name = x)
   )
@@ -1563,7 +1574,7 @@ plot_abundance_regressions <- function(data, file_path) {
       filter(Species == species)
     
     # Créer un graphique de régression pour l'espèce actuelle
-     p <- suppressMessages(ggplot(species_data, aes(x = Value, y = Abundance)) +
+    p <- suppressMessages(ggplot(species_data, aes(x = Value, y = Abundance)) +
                             geom_point() +
                             geom_smooth(method = "lm", se = FALSE, color = "blue") +
                             facet_wrap(~ Variable, scales = "free") +
@@ -1588,3 +1599,83 @@ plot_abundance_regressions <- function(data, file_path) {
   return(plots)
 }
 
+create_heatmap_with_groups <- function(data, num_groups_col = 3) {
+  # Vérifier que les données sont une matrice
+  if (!is.matrix(data$Abundance)) {
+    stop("La donnée 'Abundance' doit être une matrice.")
+  }
+  
+  # Palette de couleurs pour le heatmap
+  colMain <- viridis::viridis(100)  # 100 couleurs pour une bonne gradation
+  
+  # Calculer les distances et créer le dendrogramme pour les colonnes uniquement
+  col_dist <- dist(t(data$Abundance))
+  col_hclust <- hclust(col_dist)
+  
+  # Convertir l'objet hclust en dendrogramme
+  col_dendro <- as.dendrogram(col_hclust)
+  
+  # Découper le dendrogramme pour former des groupes
+  col_groups <- cutree(col_hclust, k = num_groups_col)
+  
+  # Créer des couleurs pour les groupes
+  col_colors <- viridis::viridis(num_groups_col)[col_groups]
+  
+  # Créer le heatmap sans dendrogramme pour les lignes
+  graph <- suppressWarnings(heatmap.2(
+    data$Abundance,                # Les données de la matrice de chaleur
+    Colv = col_dendro,             # Ajouter le dendrogramme des colonnes
+    Rowv = FALSE,                  # Retirer le dendrogramme des lignes
+    scale = "row",                 # Normaliser les données par ligne
+    col = colMain,                 # Palette de couleurs pour le heatmap
+    trace = "none",                # Désactiver le tracé des lignes de trace
+    margins = c(12, 12),           # Marges pour les étiquettes des axes
+    key = TRUE,                    # Afficher la légende de la couleur
+    keysize = 1.5,                 # Taille de la légende de la couleur
+    key.title = "Intensité",       # Titre de la légende de la couleur
+    key.xlab = "Valeurs",          # Étiquette de l'axe des x de la légende
+    key.ylab = "",                 # Étiquette de l'axe des y de la légende (vide)
+    cexRow = 1.0,                  # Taille du texte des lignes
+    cexCol = 1.0,                  # Taille du texte des colonnes
+    main = "Heatmap des Abondances",# Titre du graphique
+    ColSideColors = col_colors,    # Couleurs des barres latérales des colonnes
+    labRow = NULL,                 # Suppression des noms des lignes si trop nombreux
+    labCol = NULL                  # Suppression des noms des colonnes si trop nombreux
+  ))
+  
+  return(graph)
+}
+
+
+# Fonction pour générer un graphique ACP amélioré
+create_pca_plot <- function(covarnumeric_data, covarfactor_data = NULL, title = "Analyse en Composantes Principales (ACP)") {
+  # Réaliser l'ACP sur les covariates
+  acp_result <- prcomp(covarnumeric_data, scale. = TRUE)
+  
+  # Visualiser l'ACP avec une présentation améliorée
+  pca_plot <- fviz_pca_biplot(acp_result,
+                              geom.ind = "point",       # Représenter les individus par des points
+                              geom.var = c("arrow", "text"),       # Représenter les variables par des flèches
+                              label = "var",            # Afficher les étiquettes des variables
+                              addEllipses = TRUE,       # Ajouter des ellipses de confiance
+                              ellipse.level = 0.95,     # Niveau de confiance à 95%
+                              habillage = covarfactor_data,
+                              palette = "jco",          # Palette de couleurs
+                              arrowsize = 1.2,          # Taille des flèches
+                              pointshape = 21,          # Forme des points
+                              pointsize = 2,            # Taille des points
+                              fill.ind = "black",       # Couleur de remplissage des points
+                              col.var = "blue",         # Couleur des flèches des variables
+                              col.ind = "black",        # Couleur des points des individus
+                              repel = TRUE,             # Repousser les étiquettes pour éviter le chevauchement
+                              legend.title = list(color = "Groupes", shape = "Individus"),
+                              title = title) +          # Titre du graphique
+    theme_minimal(base_size = 14) +         # Utiliser un thème minimaliste
+    theme(axis.title = element_text(size = 14, face = "bold"), # Taille et style des titres d'axes
+          axis.text = element_text(size = 12),  # Taille du texte des axes
+          plot.title = element_text(hjust = 0.5, face = "bold"), # Centrer et mettre en gras le titre
+          legend.position = "top",        # Position de la légende
+          legend.text = element_text(size = 12))  # Taille du texte de la légende
+  
+  return(pca_plot)
+}
