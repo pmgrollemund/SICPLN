@@ -1508,15 +1508,15 @@ plot_abundance_vs_environment <- function(B_hat, data ) {
             geom_point() + geom_smooth(method = lm ,formula = y ~ x)
           labs(x = col_name, y = row_name) +
             theme_minimal()
-         
+          return(plotcovar_Abund)
           # Sauvegarder le graphique
           #ggsave(file.path(output_dir, paste("plotcovar_Abund_", row_name, "_", col_name, ".pdf", sep = "")), plotcovar_Abund, width = 10, height = 6, units = "in")      }
       }
-         return(plotcovar_Abund)
+        
     }
   }
 }
-
+}
 
 plot_combined_density <- function(data1, data2, data3, data4, col1 = "red", col2 = "blue", col3 = "green", col4 = "black" , main = "Combined Density Plot", xlab) {
   dx1 <- density(data1)
