@@ -1,5 +1,5 @@
 ---
-title: "titre"
+title: "Vignette SICPLN"
 author: "Guy Darcy Remesha et Paul-Marie Grollemund"
 date: "`r Sys.Date()`"
 output:
@@ -19,20 +19,16 @@ knitr::opts_chunk$set(
 )
 ```
 
+#  SICPLN Method
+## Introduction
+The SICPLN (Poisson-Lognormal with Smooth Information Criterion) model is designed to model count data, in particular from studies of microbial communities in various environments. This model is used when we want to understand how covariates influence complex biological or ecological phenomena, such as microbial composition in ecosystems linked to milk production.
 
+What sets the SICPLN model apart is its ability to overcome the computational limitations of conventional Poisson-Lognormal models, particularly when the number of covariates is large. By incorporating the Smooth Information Criterion (SIC), this method simplifies variable selection by regularizing model parameters. This leads to a selection of variables that matter most in predictions.
 
-This vignette describes step by step how to use the SICPLN method. 
-Below, you can find the following implemented features:
-Explication rapide de la vignette
+This vignette illustrates the use of the SICPLN model on a dataset, Hspider, and shows the steps involved in selecting variables and predicting the abundance of microbial species in relation to their environments.
 
-# La méthode SICPLN
-
-rappeler à quoi sert le modele, sur quelles données...
-
-# cas d'étude spider
-
-## importation des données
-
+# spider study
+## data import
 ```{r ,eval=TRUE,include = TRUE}
 
 suppressPackageStartupMessages(library(VGAM))
@@ -41,53 +37,64 @@ spider <- hspider
 
 ```
 
+##Appel du modèle 
 ```{r ,echo=FALSE,eval=TRUE,include = TRUE}
-
-
-source("../code/SICPLN_Pack.R")
+source("https://raw.githubusercontent.com/pmgrollemund/SICPLN/main/code/SICPLN_Pack.R")
+output_dir <- getwd()
 ```
 
 
+# Pretreatement 
+## Separation of Abundances and Covariates
+The PLN model requires two types of data:
 
+1. Response variables: This is a table of count data (matrix), where each row represents an observation and each column represents
+a species, product type, etc.
 
-
-## Prétraitement 
-
-```{r ,eval=TRUE,include = TRUE}
-  set.seed(1)
+2. Explanatory variables (covariates): These are the factors (continuous or categorical) you want to use to explain variations in the count data.
+    
+```{r ,echo=FALSE,eval=TRUE,include = TRUE}
 
 # Séparation des données d'abondance et des covariables
 Abundance <- spider[,-c(1:6)]
 Covariate <- spider[,c(1:6)]
 
-# enleve de ReflLux car fortement correllée
+# Parmétrer avec le format de PLN
 prep_spider <-  PLNmodels::prepare_data(Abundance,Covariate)
 
+```
+
+## Verification of multicollinearity between covariates
+Before building a regression model to analyze abundances, it is important to check that the environmental variables do not exhibit excessive multicollinearity.
+```{r ,echo=FALSE,eval=TRUE,include = TRUE}
 # calcul des VIF avec variable Reflux
 Res_vif_A_Ref <- calculate_VIF(Covariate[,-3], 5)
 cat("\n\n\t Variable selection using VIF :\n")
 print(Res_vif_A_Ref$selected_variables)
+```
+
+### Variables retained after VIF study
+```{r ,echo=FALSE,eval=TRUE,include = TRUE}
 
 # Variables retenues après étude des VIF
-#retain_Covar <- Covariate[, Res_vif_A_Ref$selected_variables]
 retain_Covarr <- prep_spider[, Res_vif_A_Ref$selected_variables]
-
 rownames(retain_Covarr) <- rownames(prep_spider$Abundance)
+```
 
 
+```{r ,eval=TRUE,include = TRUE}
 data_tmp <- list(Abundance = prep_spider$Abundance, Covariate = retain_Covarr)
 data_to_PLN <- prepare_data(data_tmp$Abundance, data_tmp$Covariate)
 data_to_PLN <- data_to_PLN[, -ncol(data_to_PLN)]
 
 # Spécifiez les paramètres de contrôle
 control <- PLN_param(backend = "nlopt", covariance = "full")
-
 ```
 
 
 
-## Application du modèle 
-
+## Adjust the PLN model
+Once the data is ready, you can adjust the PLN model using the PLN() function. Here's a simple example of how to adjust the model.
 ```{r ,eval=TRUE,include = TRUE}
 # Ajustement du modèle PLN (Poisson-Lognormal) avec la surface en tant qu'offset
 cat("\n\n\t launch of the PLN model .\n")
@@ -96,11 +103,21 @@ cat("        ==========================\n")
 spider_pln <- PLNmodels::PLN(Abundance ~ . , control = control, data = data_to_PLN) 
 ```
 
+
+
+
 ```{r ,eval=TRUE,include = TRUE}
 print(spider_pln$model_par$B)
-
 ```
 
+
+## Application du modèle SICPLN
+###How to apply the SICPLN method
+The SICPLN model is currently available as raw code on GitHub and has not yet been integrated into an R library. However, it works in a similar way to the PLN model, with a few differences in terms of calculation. 
+
+Firstly, the explanatory variables (covariates) and response variables (abundance) are defined from the pre-processed data. The model is fitted using the SICPLN function, which specifies the variable to be used as an offset. 
+
+The default parameters of the PLN model serve as a starting point, but specific control parameters, such as the maximum number of iterations and convergence criteria, can be adjusted. This makes it possible to optimize variable selection by minimizing an information criterion, thus improving the relevance of the results.
 ```{r ,eval=TRUE,include = TRUE}
 # Ajustement pour la selection de variable
 cat("\n\n\t launch of the SIC-PLN Model. \n")
@@ -108,69 +125,68 @@ cat("        ============================ \n")
 
 formule <- Abundance ~ .
 data <- data_to_PLN
-
+spider_sicpln <- SICPLN(formule , data = data_to_PLN, control = control)
 
 ```
 
-# Results
-## matrice B 
 
+###  Interpretation of results
+After fitting the model, we obtain the most relevant variables influencing microbial abundances.
 
+The model has selected the most important covariates while regularizing the coefficients of irrelevant variables. This makes it possible to manage multicollinearity and improve prediction accuracy.
 ```{r ,eval=TRUE,include = TRUE}
-  set.seed(1)
-
-spider_sicpln <- SICPLN(formule , data = data_to_PLN, control = control)
 spider_sicpln$res_fisher$model_par$B
 ```
 
-
+# Graphical Results
+## B_matrix 
+This section shows how to obtain the main graphical results (matrix_B) derived from the PLN and SICPLN methods.
 
 ```{r ,eval=TRUE,include = TRUE}
-  set.seed(1)
-
-# Convertir la matrice en un format adapté à ggplot2
-data_df <- melt(data$Abundance)
-data_sic <- melt(spider_sicpln$fitted) 
-
-# Renommer les colonnes
-colnames(data_df) <- c("Site", "Species", "Comptage")
-colnames(data_sic) <- c("Site", "Species", "Comptage")
 
 # Graphiques
 plot_coef_pln <- coef_genus_barre(spider_pln$model_par$B[-1,], 
                                   axis_names = c("Spider", "Variables", "Coefficients value", "PLN"), data)
+plot_coef_pln
 plot_coef_sicpln <- coef_genus_barre(spider_sicpln$res_fisher$model_par$B[-1,],
                                      axis_names = c("Spider species", "Variables", "Coefficients value", "SICPLN"), data)
 plot_coef_sicpln
 ```
 
-
-## matrice de precision
-```{r ,eval=TRUE,include = TRUE}
-
-```
-
-## Autour des données
-
-```{r ,eval=TRUE,include = TRUE}
-  set.seed(1)
-
-# Convertir la matrice en un format adapté à ggplot2
-data_df <- melt(data$Abundance)
-data_sic <- melt(spider_sicpln$fitted)
+```{r}
+# Save graphics in the specified output folder
+ggsave(file.path(output_dir, "plot_pln.pdf"), plot_coef_pln, width = 10, height = 6, units = "in")
+ggsave(file.path(output_dir, "plot_sicpln.pdf"), plot_coef_sicpln, width = 10, height = 6, units = "in")
 ```
 
 
-# cas d'étude genus
+## precision matrix
+The main purpose of the precision matrix(sigma) is to capture conditional independence between spider species.
 
+The precision matrix presented here for the SICPLN model illustrates the direct conditional relationships between the abundances of different hunter spider species.
 
+```{r ,eval=TRUE,include = TRUE}
+# image de la matrice sigma (precision matrix)
+tmp <- solve(spider_sicpln$res_fisher$model_par$Sigma)
+norm <- sqrt(diag(tmp)) %*% t(sqrt(diag(tmp)))
+cor_mat <- tmp / norm
+precision_mat_sicpln <- plot_precision_matrix(cor_mat, axis_names = c("", "", "", "SICPLN_Spider precision matrix of Sigma"), limit = NULL)
+precision_mat_sicpln
+```
 
+## Regression between Abundance and Covariate for significant variables
+This graph shows how the abundance of a microbial species varies as a function of an environmental variable, with a trend line to help visualize this relationship.
+
+This function selects variables for which the estimated coefficients (in the B_hat matrix) lie between ]-1, 1[.
+
+For each combination of environmental variable and microbial species (where the coefficient is non-zero), it generates a scatter plot with a fitted linear regression curve.
+```{r ,eval=TRUE,include = TRUE}
+# # Relation entre variable environnementale et Espèce
+plotcovar_Abund_sic <- plot_abundance_vs_environment(spider_sicpln$res_fisher$model_par$B, data, output_dir)
+
+```
 
 # Session informations
 ```{r session,echo=FALSE,message=FALSE, warning=FALSE}
   sessionInfo()
 ```
-
-
-
-
