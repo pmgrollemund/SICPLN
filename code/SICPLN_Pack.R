@@ -25,7 +25,7 @@ suppressPackageStartupMessages(library("RColorBrewer"))
 suppressPackageStartupMessages(library("gplots"))
 suppressPackageStartupMessages(library("viridis"))
 suppressPackageStartupMessages(library("factoextra"))
-suppressPackageStartupMessages(library(tidyverse))
+suppressPackageStartupMessages(library("tidyverse"))
 ################################################################################ ----
 #######
 # Required objects 
