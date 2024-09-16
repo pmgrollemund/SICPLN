@@ -1515,8 +1515,8 @@ plot_abundance_vs_environment <- function(B_hat, data ) {
         
     }
   }
-   
-} return(plotcovar_Abund)
+   return(plotcovar_Abund)
+} 
 }
 
 plot_combined_density <- function(data1, data2, data3, data4, col1 = "red", col2 = "blue", col3 = "green", col4 = "black" , main = "Combined Density Plot", xlab) {
