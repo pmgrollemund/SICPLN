@@ -182,7 +182,7 @@ This function selects variables for which the estimated coefficients (in the B_h
 For each combination of environmental variable and microbial species (where the coefficient is non-zero), it generates a scatter plot with a fitted linear regression curve.
 ```{r ,eval=TRUE,include = TRUE}
 # # Relation entre variable environnementale et Espèce
-plotcovar_Abund_sic <- plot_abundance_vs_environment(spider_sicpln$res_fisher$model_par$B, data, output_dir)
+plotcovar_Abund_sic <- plot_abundance_vs_environment(spider_sicpln$res_fisher$model_par$B, data)
 
 ```
 
