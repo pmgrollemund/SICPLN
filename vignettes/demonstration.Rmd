@@ -39,7 +39,12 @@ spider <- hspider
 
 ##Appel du modèle 
 ```{r ,eval=TRUE,include = TRUE}
-source("https://raw.githubusercontent.com/pmgrollemund/SICPLN/main/code/SICPLN_Pack.R")
+source("https://raw.githubusercontent.com/pmgrollemund/SICPLN/main/code/packages.R")
+source("https://raw.githubusercontent.com/pmgrollemund/SICPLN/main/code/graphics.R")
+source("https://raw.githubusercontent.com/pmgrollemund/SICPLN/main/code/models_fitting.R")
+source("https://raw.githubusercontent.com/pmgrollemund/SICPLN/main/code/simulation_data.R")
+source("https://raw.githubusercontent.com/pmgrollemund/SICPLN/main/code/functions.R")
+
 output_dir <- getwd()
 ```
 
@@ -65,7 +70,12 @@ prep_spider <-  PLNmodels::prepare_data(Abundance,Covariate)
 ```
 
 ## Verification of multicollinearity between covariates
-Before building a regression model to analyze abundances, it is important to check that the environmental variables do not exhibit excessive multicollinearity.
+Before building a regression model to analyze abundances, it is important to check that environmental variables do not exhibit excessive multicollinearity.
+
+To detect multicollinearity among environmental variables, we calculated variance inflation factors (VIF). In order not to compromise the precision of the estimated coefficients
+estimated coefficients, a VIF greater than 5 is considered high for numerical variables, while a chi-square test greater than 5 out of 100 is used for categorical variables. Variables with high FIVs are removed from the dataset to reduce multicollinearity. This step allows us to retain only the most relevant and uncorrelated explanatory variables, thus improving model stability and reliability.
+
+Translated with DeepL.com (free version)
 ```{r ,eval=TRUE,include = TRUE}
 # calcul des VIF avec variable Reflux
 Res_vif_A_Ref <- calculate_VIF(Covariate[,-3], 5)
@@ -154,20 +164,18 @@ plot_coef_sicpln
 
 
 ```{r ,eval=TRUE,include = TRUE}
-spider_sicpln$BIC
+cat("\n\n\t BIC of PLN = ", spider_pln$BIC)
 
-spider_pln$BIC
+
+cat("\n\n\t BIC of SICPLN = ", spider_sicpln$BIC)
+
 ```
 
 
 
 
 
-```{r echo=False,eval=TRUE,include = TRUE}
-# Save graphics in the specified output folder
-ggsave(file.path(output_dir, "plot_pln.pdf"), plot_coef_pln, width = 10, height = 6, units = "in")
-ggsave(file.path(output_dir, "plot_sicpln.pdf"), plot_coef_sicpln, width = 10, height = 6, units = "in")
-```
+
 
 
 ## precision matrix
@@ -177,7 +185,7 @@ The precision matrix presented here for the SICPLN model illustrates the direct 
 
 ```{r ,eval=TRUE,include = TRUE}
 # image de la matrice sigma (precision matrix)
-tmp <- solve(spider_sicpln$res_fisher$model_par$Sigma)
+tmp <- solve(spider_pln$model_par$Sigma)
 norm <- sqrt(diag(tmp)) %*% t(sqrt(diag(tmp)))
 cor_mat <- tmp / norm
 precision_mat_sicpln <- plot_precision_matrix(cor_mat, axis_names = c("", "", "", "SICPLN_Spider precision matrix of Sigma"), limit = NULL)
@@ -193,18 +201,18 @@ For each combination of environmental variable and microbial species (where the 
 
 ```{r ,eval=TRUE,include = TRUE}
 # image de la matrice sigma (precision matrix)
-tmp <- solve(spider_pln$res_fisher$model_par$Sigma)
+tmp <- solve(spider_pln$model_par$Sigma)
 norm <- sqrt(diag(tmp)) %*% t(sqrt(diag(tmp)))
 cor_mat <- tmp / norm
-precision_mat_sicpln <- plot_precision_matrix(cor_mat, axis_names = c("", "", "", "PLN_Spider precision matrix of Sigma"), limit = NULL)
-precision_mat_sicpln
+precision_mat_pln <- plot_precision_matrix(cor_mat, axis_names = c("", "", "", "PLN_Spider precision matrix of Sigma"), limit = NULL)
+precision_mat_pln
 ```
 
 
 
 
 ```{r ,eval=TRUE,include = TRUE}
-# # Relation entre variable environnementale et Espèce
+# Relation entre variable environnementale et Espèce
 plotcovar_Abund_sic <- plot_abundance_vs_environment(spider_sicpln$res_fisher$model_par$B, data)
 plotcovar_Abund_sic
 ```
@@ -213,3 +221,4 @@ plotcovar_Abund_sic
 ```{r session,echo=FALSE,message=FALSE, warning=FALSE}
   sessionInfo()
 ```
+
