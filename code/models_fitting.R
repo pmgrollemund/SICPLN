@@ -24,6 +24,25 @@ calcul_Offset <- function(data, column_name = NULL) {
   return(O)
 }
 
+compute_r_squared <- function(observed_values, predicted_values) {
+  # Calcul de la moyenne des valeurs observées
+  mean_observed <- mean(observed_values)
+  
+  # Calcul de la somme des carrés des différences entre les valeurs observées et la moyenne
+  total_sum_squares <- sum((observed_values - mean_observed)^2)
+  
+  # Calcul de la somme des carrés des résidus
+  residual_sum_squares <- sum((observed_values - predicted_values)^2)
+  
+  # Calcul du coefficient de détermination R²
+  r_squared <- 1 - (residual_sum_squares / total_sum_squares)
+  
+  return(r_squared)
+}
+
+
+
+
 #----
 predict_sicpln <- function(Covariate, Offset , params){       #GDR : 27-3-2024 : j'ai remplace le nom de la fonction fitted_pln par Error_var
   # data = data_to_predict
@@ -47,25 +66,9 @@ predict_sicpln <- function(Covariate, Offset , params){       #GDR : 27-3-2024 :
   return(fitted_values)
 }
 
-compute_r_squared <- function(observed_values, predicted_values) {
-  # Calcul de la moyenne des valeurs observées
-  mean_observed <- mean(observed_values)
-  
-  # Calcul de la somme des carrés des différences entre les valeurs observées et la moyenne
-  total_sum_squares <- sum((observed_values - mean_observed)^2)
-  
-  # Calcul de la somme des carrés des résidus
-  residual_sum_squares <- sum((observed_values - predicted_values)^2)
-  
-  # Calcul du coefficient de détermination R²
-  r_squared <- 1 - (residual_sum_squares / total_sum_squares)
-  
-  return(r_squared)
-}
-
 
 # Fonction pour calculer le log-vraisemblance
-compute_log_likelihood <- function(Abundance, Covariate, B, Sigma, M, S) {
+calculate_log_likelihood <- function(Abundance, Covariate, B, Sigma, M, S) {
   Z <- as.matrix(Covariate %*% B)
   loglik <- sum(dpois(Abundance, exp(Z + M + S^2 / 2), log = TRUE))
   return(loglik)
