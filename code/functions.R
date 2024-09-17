@@ -225,3 +225,64 @@ format_PLN <- function(Abundance, Covariate) {
   return(list(data = data, params = params))
 }
 # ----
+
+
+##### Fonction glmnet_lasso_poisson_withoffset : ----
+glmnet_lasso_poisson_withoffset <- function(Abundance, Covariate, offset_var, verbose=T){
+  #### Initialisation
+  #Nombre de colonnes dans la matrice Abundance, qui représente le nombre de variables à prédire
+  p <- ncol(Abundance)
+  
+  #Nombre de lignes dans la matrice Abundance, qui représente le nombre d'observations
+  n <- nrow(Abundance)
+  
+  # Nombre de colonnes dans la matrice Covariate, qui représente le nombre de Covariates plus un pour l'intercept
+  d <- ncol(Covariate)+1
+  
+  # Initialisation d'une matrice vide pour stocker les coefficients estimés pour chaque variable réponse
+  hat_B <- matrix(NA, ncol=p, nrow=d)
+  
+  # Initialisation d'une matrice vide pour stocker les prédictions pour chaque variable réponse
+  prediction <- matrix(NA, ncol = p, nrow = n)
+  
+  #### Ajuste le modèle
+  # Boucle sur chaque variable réponse
+  for (j in 1:p) {
+    
+    # Estimation du modèle de régression LASSO avec glmnet pour la variable réponse j
+    res_Pois_off <- glmnet(x = Covariate, y = Abundance[, j], offset = offset_var, family = ("poisson"))
+    if(verbose)
+      print(coef(res_Pois_off))
+    
+    # Stockage des coefficients estimés pour la variable réponse j
+    hat_B[, j] <- as.matrix(coef(res_Pois_off, s = 1))
+    
+    # Prédiction des valeurs pour la variable réponse j à partir du modèle ajusté
+    prediction[, j] <- predict(res_Pois_off, newx = Covariate, s = 1, newo = offset_var)
+    
+  }
+  
+  #### Résultat
+  # Retourne une liste contenant les coefficients estimés et les prédictions
+  return(list( hat_B = hat_B,prediction = prediction))
+}
+#----
+
+#Description : ----
+# Fonction pour calculer les facteurs d'inflation de la variance (VIF)
+# parametres : Covariate
+#renvoie : les VIF sur chaque variable
+
+# Exemple a executer : ----
+# Création d'un ensemble de données fictif
+#set.seed(123)  # Pour la reproductibilité
+#vegetation_index <- rnorm(100, mean = 50, sd = 10)
+#wetness <- rnorm(100, mean = 12, sd = 3)
+#center_xv <- rnorm(100, mean = 40, sd = 5)
+
+# Créer un dataframe avec ces variables
+#data <- data.frame(vegetation_index, wetness, center_xv)
+# Utiliser la fonction calculate_VIF pour calculer les VIF
+#VIF_results <- calculate_VIF(data)
+# Afficher les résultats
+#print(VIF_results)
