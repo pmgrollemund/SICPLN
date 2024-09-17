@@ -9,11 +9,15 @@
 # Introduit le calcul sur la selection de variables avec SIC dans le modèle PLN
 compute_fisher_opt_pln <- function(Covariate, Abundance, O, numb_eps, maxIter, plngendata) {
   
-  cat("\t\n Initialization... \n")
+  # Covariate = Covariate; Abundance = Abundance;
+  # O = offsett; numb_eps = numb_eps; maxIter = maxIter; plngendata = plngendata
+  
   p <- ncol(Abundance)                      # nombre d'especes
   n <- nrow(Covariate)                      # nombre d'observation
+  #Covariate <- cbind(rep(1,n),Covariate)            # Ajout de l'intercept pour la matrices des covariables 
   
-  O <- O 
+  O <- O #offset PMG
+  #dim(O)
   d <- ncol(Covariate) 
   w <- rep(1,n)                     # le poids de chaque observation
   B <- plngendata$model_par$B        # Le parametre  B generé par la fontion PLN          GDR 05-04-2024  : A revoir le commentaire
@@ -29,7 +33,6 @@ compute_fisher_opt_pln <- function(Covariate, Abundance, O, numb_eps, maxIter, p
   E[1] <- e1                           #affectation du premier valeur au vecteur E
   
   for(t in 2:numb_eps){E[t] <- e1*(0.87)^(t-1)}
-  E
   #calcul des  100 autres elements du vecteur
   
   vecepsilon <- sort(E, decreasing = TRUE)
@@ -105,7 +108,7 @@ compute_fisher_opt_pln <- function(Covariate, Abundance, O, numb_eps, maxIter, p
         R <- qr.R(qr_decomposition)
         
         # Calcul de l'inverse de R
-        inverse_R <- solve(R)
+        inverse_R <- MASS::ginv(R)  #MASS::ginv
         
         # Transposée de Q
         transpose_Q <- t(Q)
@@ -131,6 +134,8 @@ compute_fisher_opt_pln <- function(Covariate, Abundance, O, numb_eps, maxIter, p
         
         #--------------------------------- 
         
+        
+        
         diff_B <- sum(abs(B_newmat-B_oldf))
         if(diff_B <= B_tol)
         {
@@ -148,6 +153,7 @@ compute_fisher_opt_pln <- function(Covariate, Abundance, O, numb_eps, maxIter, p
         }
         if(k==maxIter)
         {
+          #cat(" pas de Convergence","\n")
           B <- B_newmat
           B_oldf <- B
         }
@@ -164,7 +170,7 @@ compute_fisher_opt_pln <- function(Covariate, Abundance, O, numb_eps, maxIter, p
       B <- B
       Sigma <- plngendata$model_par$Sigma
       Omega <- plngendata$model_par$Omega
-      loglik <- compute_log_likelihood(Abundance, Covariate, B, Sigma, M, S)
+      loglik <- calculate_log_likelihood(Abundance, Covariate, B, Sigma, M, S)
     }
     
     model_par <- list(B = B, Sigma = Sigma,Omega = Omega)
@@ -254,7 +260,6 @@ SICPLN <- function(formule, offset_column_name = NULL , data , numb_eps = 100, m
   }
   
   class(resf) <- "SICPLN"
-  cat("\n\n")
   return(resf)
 }
 
@@ -286,11 +291,11 @@ SICPLN <- function(formule, offset_column_name = NULL , data , numb_eps = 100, m
 print.SICPLN <- function(x, ...) {
   cat("A multivariate Poisson Lognormal fit with full covariance model.\n")
   cat("==================================================================\n")
-  cat(sprintf("  nb_param   loglik     BIC\n"))
-  cat(sprintf("  %-10d %-10.3f %-10.3f\n", x$nb_param, x$loglik, x$BIC))
+  cat(sprintf("  nb_param   loglik      BIC\n"))
+  cat(sprintf("%-10d %-10.3f %-10.3f\n", x$nb_param, x$loglik, x$BIC))
   cat("==================================================================\n")
-  cat("* Useful fields\n")
-  cat("  $model_par,  $var_par, $res_pln, $res_fisher\n")
+  cat("  * Useful fields\n")
+  cat("  $model_par,  $var_par, res_pln, res_fisher\n")
   cat("  $loglik, $BIC, $nb_param, $criteria\n")
   cat("* Useful S3 methods\n")
   cat("  print(), coef(), sigma(), vcov(), fitted()\n")
