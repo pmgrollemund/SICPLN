@@ -1,3 +1,76 @@
+## Fonction qui calcule l'offset ----
+#Description :
+#Parametre : variable dans covariate
+# Fonction pour calculer la matrice O en utilisant le nom de la colonne
+calcul_Offset <- function(data, column_name = NULL) {
+  if (!is.null(data)) {
+    if (!"Abundance" %in% colnames(data)) {
+      stop("La variable 'Abundance' n'existe pas dans les données.")
+    }
+    if (!is.null(column_name) && !column_name %in% colnames(data)) {
+      stop("La colonne spécifiée n'existe pas dans les données.")
+    }
+  } else {
+    stop("Les données ne sont pas spécifiées.")
+  }
+  
+  if (!is.null(column_name)) {
+    column_selected <- data[[column_name]]
+    O <- matrix(rep(column_selected, ncol(data$Abundance)), ncol = ncol(data$Abundance), nrow = nrow(data$Abundance))
+  } else {
+    O <- matrix(rep(0, nrow(data$Abundance) * ncol(data$Abundance)), nrow = nrow(data$Abundance), ncol = ncol(data$Abundance))
+  }
+  
+  return(O)
+}
+
+#----
+predict_sicpln <- function(Covariate, Offset , params){       #GDR : 27-3-2024 : j'ai remplace le nom de la fonction fitted_pln par Error_var
+  # data = data_to_predict
+  # Offset = offsett
+  # params = list(B = res_fs$model_par$B,S = res_fs$var_par$S , M = res_fs$var_par$M)
+  ### Initialisation
+  n <- nrow(data$Abundance)  #Nombre d'observations
+  index <- torch_tensor(1:n)
+  
+  ## Conversion of parameters to torch tensors (pointers)
+  params <- lapply(params, torch_tensor, requires_grad = F)
+  
+  
+  #Calcul des Coeffs pour les donnees ajustees
+  S2 <- torch_square(params$S[index])
+  Z <- torch_tensor(Offset)[index] + params$M[index] + torch_matmul(torch_tensor(Covariate)[index], params$B)
+  fitted_values <- (torch_exp(Z + .5 * S2))
+  fitted_values <- as.matrix(fitted_values)
+  colnames(fitted_values) <- colnames(data$Abundance)
+  
+  return(fitted_values)
+}
+
+compute_r_squared <- function(observed_values, predicted_values) {
+  # Calcul de la moyenne des valeurs observées
+  mean_observed <- mean(observed_values)
+  
+  # Calcul de la somme des carrés des différences entre les valeurs observées et la moyenne
+  total_sum_squares <- sum((observed_values - mean_observed)^2)
+  
+  # Calcul de la somme des carrés des résidus
+  residual_sum_squares <- sum((observed_values - predicted_values)^2)
+  
+  # Calcul du coefficient de détermination R²
+  r_squared <- 1 - (residual_sum_squares / total_sum_squares)
+  
+  return(r_squared)
+}
+
+
+# Fonction pour calculer le log-vraisemblance
+compute_log_likelihood <- function(Abundance, Covariate, B, Sigma, M, S) {
+  Z <- as.matrix(Covariate %*% B)
+  loglik <- sum(dpois(Abundance, exp(Z + M + S^2 / 2), log = TRUE))
+  return(loglik)
+}
+
 ### Fonction compute_fisher_opt_pln : ----
 ## Description : ----
 # Introduit le calcul sur la selection de variables avec SIC
