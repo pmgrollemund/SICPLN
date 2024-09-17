@@ -394,3 +394,81 @@ vcov.SICPLN <- function(object, ...){
 fitted.SICPLN <- function(object, ...){
   return(object$fitted)
 }
+
+# Fonction calculate_VIF : ----
+calculate_VIF <- function(Covariate, seuil, pval_threshold = 0.05) {
+  # Créer un vecteur pour stocker les résultats des VIF
+  VIF_values <- rep(NA, ncol(Covariate))
+  
+  # Créer une matrice pour stocker les p-values du test du chi-carré pour les variables catégorielles
+  cat_pvals <- matrix(NA, ncol(Covariate), ncol(Covariate))
+  colnames(cat_pvals) <- colnames(Covariate)
+  rownames(cat_pvals) <- colnames(Covariate)
+  
+  # Parcourir chaque variable
+  for (i in 1:ncol(Covariate)) {
+    # Sélectionner la variable dépendante (y)
+    y <- Covariate[, i]
+    
+    if (is.factor(y) || is.character(y)) {
+      # Tester la colinéarité entre variables catégorielles
+      for (j in 1:ncol(Covariate)) {
+        if (j != i && (is.factor(Covariate[, j]) || is.character(Covariate[, j]))) {
+          # Effectuer le test du chi-carré
+          chi2_test <- suppressWarnings(chisq.test(table(y, Covariate[, j])))
+          cat_pvals[i, j] <- chi2_test$p.value
+        }
+      }
+      # Ne pas calculer le VIF pour les variables catégorielles
+      VIF_values[i] <- NA
+    } else {
+      # Sélectionner toutes les autres variables indépendantes (X_i) en excluant les variables catégorielles
+      X_i <- Covariate[, -i]
+      
+      # Créer un nouveau dataframe avec y et X_i
+      df <- data.frame(y = y, X_i)
+      
+      # Calculer le coefficient de détermination (R²) du modèle de régression linéaire
+      R_squared <- summary(lm(y ~ ., data = df))$r.squared 
+      
+      # Calculer le VIF à partir de R²
+      VIF_values[i] <- ifelse(R_squared == 0, NA, 1 / (1 - R_squared))
+    }
+  }
+  
+  # Attribution des noms aux valeurs
+  names(VIF_values) <- colnames(Covariate)
+  
+  # Identifier les variables avec un VIF inférieur au seuil
+  selected_variables <- colnames(Covariate)[VIF_values < seuil]
+  
+  # Identifier les variables catégorielles avec des p-values significatives
+  cat_pairs <- which(cat_pvals < pval_threshold, arr.ind = TRUE)
+  cat_vars_to_remove <- unique(c(colnames(Covariate)[cat_pairs[, 1]], colnames(Covariate)[cat_pairs[, 2]]))
+  
+  # Filtrer les valeurs NA de selected_variables
+  selected_variables <- selected_variables[!is.na(selected_variables)]
+  
+  # Concaténer les variables catégorielles non colinéaires
+  selected_variables <- unique(c(selected_variables, colnames(Covariate)[!colnames(Covariate) %in% cat_vars_to_remove & sapply(Covariate, is.factor)]))
+  
+  # Créer une liste pour stocker les résultats
+  results <- list(VIF_values = VIF_values, selected_variables = selected_variables, cat_pvals = cat_pvals)
+  
+  # Si le max des VIF est supérieur au seuil
+  if (max(VIF_values, na.rm = TRUE) > seuil) {
+    # Identifier l'index de la variable avec le VIF le plus élevé
+    index_to_remove <- which.max(VIF_values)
+    
+    # Enlever la variable correspondante de Covariate
+    Covariate <- Covariate[, -index_to_remove]
+    
+    # Rappeler la fonction pour recalculer les VIF sans cette variable
+    results <- calculate_VIF(Covariate, seuil, pval_threshold)
+  }
+  
+  # Retourner les résultats
+  return(results)
+}
+# ----
+
