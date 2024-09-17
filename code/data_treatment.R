@@ -1,3 +1,82 @@
+# Erreur de prédiction en tenant compte des paramètres variationnels : ----
+
+#GDR : 27-3-2024 :commentaire de Jean-Yves --->   # Erreur de prédiction en tenant compte des paramètres variationnels
+### Description : ---- 
+# Erreur de prédiction en tenant compte des paramètres variationnels
+## Parametres initiales :
+#   data : données du modèle
+#   params : paramètres du modèle
+# Renvoie l'erreur apres varitionnal EM
+##  Exemple a executer : ----
+
+## fonction Error_var : ----
+Error_var<-function(data, params){       #GDR : 27-3-2024 : j'ai remplace le nom de la fonction fitted_pln par Error_var
+  ### Initialisation
+  p <- ncol(data$Abundance)  #nombre d'especes
+  d <- ncol(data$Covariate)  #Nombre de variables explicatives(Covariates)
+  n <- nrow(data$Covariate)  #Nombre d'observations
+  index <- torch_tensor(1:n)
+  
+  ## Conversion of data and parameters to torch tensors (pointers)
+  data   <- lapply(data, torch_tensor)
+  params <- lapply(params, torch_tensor, requires_grad = F)
+  
+  
+  #Calcul des Coeffs pour les donnees ajustees
+  S2 <- torch_square(params$S[index])
+  Z <- data$O[index] + params$M[index] + torch_matmul(data$Covariate[index], params$B)
+  res_tmp <- (torch_exp(Z + .5 * S2))
+  return(as.matrix(res_tmp))
+}
+# ----  
+
+# calcul erreur de prediction ( Ou Taux de certitude au niveau de Beta) : ----
+## Description : ----
+# Fonction qui calcule l'erreur de prediction.
+## Paramètres initiaux :
+# vrai_beta : les données de comptage réelles (data$Y)
+# beta_estime : les données de comptage prédites
+# Valeur renvoyee : Taux de certitude pour les Beta
+##  Exemple a executer : ----
+# # Données de vrais beta et beta estimés
+# vrai_beta <- matrix(c(0, 0, 1, 0, 0, 1), nrow = 2, byrow = TRUE)
+# beta_estime <- matrix(c(0, 0, 1, 0, 0, 1), nrow = 2, byrow = TRUE)
+# 
+# # Calcul du taux de certitude pour les Beta
+# taux_certitude <- sparsity_recognition(vrai_beta, beta_estime)
+# 
+# # Affichage des résultats
+# print(paste("Taux de certitude pour les Beta - TNR:", taux_certitude$TNR))
+# print(paste("Taux de certitude pour les Beta - TPR:", taux_certitude$TPR))
+
+## fonction sparsity_recognition : ----
+sparsity_recognition <- function(vrai_beta, beta_estime){
+  TN <- 0            # Effectifs des vraies zeros
+  TP <- 0            # Effectifs des elements non-zeros
+  for(i in 1:nrow(vrai_beta))
+  {
+    for(j in 1:ncol(vrai_beta))
+    {
+      if(vrai_beta[i,j]!=0 & beta_estime[i,j]!=0){TP <- TP+1}
+      
+      if(vrai_beta[i,j]==0 & beta_estime[i,j]==0){TN <- TN+1}
+    }
+  }
+  # Taux de non zero estimée estimée zero
+  TPR <- TP/(length(which(vrai_beta!=0)))
+  # Taux de zero estimée zéro
+  TNR <- TN/(length(which(vrai_beta==0)))
+  
+  # stockage des taux de certitude dans une liste
+  sol <- list(TNR=TNR,TPR=TPR)
+  return(sol)
+}
+# ---- 
+
+# Avec pln et optimisation des paramètre variationnellle : ----
+## Description : ----
+#
+
 ## Exemple a executer :----
 # # Définir les paramètres
 # nombre_espece <- 10
@@ -260,3 +339,68 @@ plot_error_prediction <- function(Error_n_30, Error_n_50, Error_n_100, Error_n_1
   print(plot_error_prediction_ech)
 }
 # ---- 
+
+#################################  GENUS2 #####################################
+#######################################
+# Fonction glmnet_lasso_poisson_withoffset  ----
+####### Destription : ----
+#   Applique le modele GLMNET sur les données(Abundance, Covariate, offset)
+#   les utilisent comme entrée pour la fonction glmnet_lasso_poisson_withoffset
+#   affiche les coefficients estimés et les prédictions résultantes
+####Parametre:
+# Abundance : matrice contenant les mesures d'Abundance des espèces et qui suit la loi de poisson
+# Covariate : matrice contenant les variables explicatives et qui suit la loi normale
+# Valeur renvoye : Retourne une liste contenant les coefficients estimés et les prédictions
+
+### Exemmple à faire :----
+# # Génération de données d'exemple : 100 observations, 3 covariables et 2 variables d'Abundance
+# set.seed(123)                            # Pour la reproductibilité
+#Abundance <- matrix(rpois(100*2, 5), ncol = 2)            # Deux variables d'Abundance
+#Covariate <- matrix(rnorm(100*3), ncol = 3)               # Trois covariables
+# # Appel de la fonction glmnet_lasso_poisson_withoffset avec les données d'exemple
+#resultats <- glmnet_lasso_poisson_withoffset(Abundance, Covariate)
+# # Affichage des coefficients estimés
+#print("Coefficients estimés :")
+#print(resultats$coefficient)
+
+
+##### Fonction glmnet_lasso_poisson_withoffset : ----
+glmnet_lasso_poisson_withoffset <- function(Abundance, Covariate, offset_var, verbose=T){
+  #### Initialisation
+  #Nombre de colonnes dans la matrice Abundance, qui représente le nombre de variables à prédire
+  p <- ncol(Abundance)
+  
+  #Nombre de lignes dans la matrice Abundance, qui représente le nombre d'observations
+  n <- nrow(Abundance)
+  
+  # Nombre de colonnes dans la matrice Covariate, qui représente le nombre de Covariates plus un pour l'intercept
+  d <- ncol(Covariate)+1
+  
+  # Initialisation d'une matrice vide pour stocker les coefficients estimés pour chaque variable réponse
+  hat_B <- matrix(NA, ncol=p, nrow=d)
+  
+  # Initialisation d'une matrice vide pour stocker les prédictions pour chaque variable réponse
+  prediction <- matrix(NA, ncol = p, nrow = n)
+  
+  #### Ajuste le modèle
+  # Boucle sur chaque variable réponse
+  for (j in 1:p) {
+    
+    # Estimation du modèle de régression LASSO avec glmnet pour la variable réponse j
+    res_Pois_off <- glmnet(x = Covariate, y = Abundance[, j], offset = offset_var, family = ("poisson"))
+    if(verbose)
+      print(coef(res_Pois_off))
+    
+    # Stockage des coefficients estimés pour la variable réponse j
+    hat_B[, j] <- as.matrix(coef(res_Pois_off, s = 1))
+    
+    # Prédiction des valeurs pour la variable réponse j à partir du modèle ajusté
+    prediction[, j] <- predict(res_Pois_off, newx = Covariate, s = 1, newo = offset_var)
+    
+  }
+  
+  #### Résultat
+  # Retourne une liste contenant les coefficients estimés et les prédictions
+  return(list( hat_B = hat_B,prediction = prediction))
+}
+#----
